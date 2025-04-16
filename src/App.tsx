@@ -1,4 +1,5 @@
 import { App as AntApp, ConfigProvider } from 'antd';
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 
 import type { EndpointConfig } from './components/ItemCrud';
 import ItemCrud from './components/ItemCrud';
@@ -386,33 +387,46 @@ function App() {
   };
 
   return (
-    <ConfigProvider
-      theme={{
-        token: {
-          colorPrimary: '#1890ff',
-        },
-      }}>
-      <AntApp notification={{ placement: 'bottomRight', duration: 5 }}>
-        <div
-          style={{
-            width: '100vw',
-            height: '100vh',
-            overflow: 'hidden',
-            display: 'flex',
-            flexDirection: 'column',
-          }}>
+    <BrowserRouter>
+      <ConfigProvider
+        theme={{
+          token: {
+            colorPrimary: '#1890ff',
+          },
+        }}>
+        <AntApp notification={{ placement: 'bottomRight', duration: 5 }}>
           <div
             style={{
-              flex: 1,
+              width: '100vw',
+              height: '100vh',
+              overflow: 'hidden',
               display: 'flex',
               flexDirection: 'column',
-              overflow: 'hidden',
             }}>
-            <ItemCrud apiClient={apiClient} config={config} />
+            <div
+              style={{
+                flex: 1,
+                display: 'flex',
+                flexDirection: 'column',
+                overflow: 'hidden',
+              }}>
+              <Routes>
+                <Route
+                  path='/:entity'
+                  element={<ItemCrud apiClient={apiClient} config={config} />}
+                />
+                <Route
+                  path='/'
+                  element={
+                    <Navigate to={`/${config.endpoints[0].key}`} replace />
+                  }
+                />
+              </Routes>
+            </div>
           </div>
-        </div>
-      </AntApp>
-    </ConfigProvider>
+        </AntApp>
+      </ConfigProvider>
+    </BrowserRouter>
   );
 }
 

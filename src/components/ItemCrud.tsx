@@ -20,6 +20,7 @@ import {
   ReloadOutlined,
 } from '@ant-design/icons';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 
 import { AxiosInstance } from 'axios';
 import type { ColumnsType } from 'antd/es/table';
@@ -73,6 +74,9 @@ interface ItemCrudProps {
 }
 
 export default function ItemCrud({ apiClient, config }: ItemCrudProps) {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { entity } = useParams<{ entity: string }>();
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -101,10 +105,45 @@ export default function ItemCrud({ apiClient, config }: ItemCrudProps) {
   const [selectedItem, setSelectedItem] = useState<Item | null>(null);
 
   useEffect(() => {
-    if (config?.endpoints?.length > 0) {
-      setSelectedEndpoint(config.endpoints[0]);
+    if (entity) {
+      const endpoint = config.endpoints.find((e) => e.key === entity);
+      if (endpoint) {
+        setSelectedEndpoint(endpoint);
+        setPagination({
+          current: 1,
+          pageSize: 10,
+          total: 0,
+        });
+      }
+    } else if (config.endpoints.length > 0) {
+      navigate(`/${config.endpoints[0].key}`, { replace: true });
     }
-  }, [config.endpoints]);
+  }, [entity, config.endpoints, navigate]);
+
+  useEffect(() => {
+    const searchParams = new URLSearchParams(location.search);
+    const page = searchParams.get('page');
+    const pageSize = searchParams.get('pageSize');
+
+    if (page || pageSize) {
+      setPagination((prev) => ({
+        ...prev,
+        current: page ? parseInt(page, 10) : prev.current,
+        pageSize: pageSize ? parseInt(pageSize, 10) : prev.pageSize,
+      }));
+    }
+  }, [location.search]);
+
+  useEffect(() => {
+    if (selectedEndpoint) {
+      const searchParams = new URLSearchParams();
+      searchParams.set('page', pagination.current.toString());
+      searchParams.set('pageSize', pagination.pageSize.toString());
+      navigate(`/${selectedEndpoint.key}?${searchParams.toString()}`, {
+        replace: true,
+      });
+    }
+  }, [pagination.current, pagination.pageSize, selectedEndpoint, navigate]);
 
   const fetchItems = useCallback(
     async (retry = false) => {
@@ -592,7 +631,7 @@ export default function ItemCrud({ apiClient, config }: ItemCrudProps) {
           {config.endpoints.map((endpoint) => (
             <Menu.Item
               key={endpoint.key}
-              onClick={() => setSelectedEndpoint(endpoint)}>
+              onClick={() => navigate(`/${endpoint.key}`)}>
               {endpoint.label}
             </Menu.Item>
           ))}
