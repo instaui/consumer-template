@@ -599,7 +599,7 @@ export default function ItemCrud({
 
   const renderFormField = (field: FieldConfig) => {
     const rules: Rule[] = [
-      { required: !field.isNullable, message: `${field.label} is required` },
+      { required: field.isRequired, message: `${field.label} is required` },
     ];
 
     if (field.validator) {
