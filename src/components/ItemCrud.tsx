@@ -5,51 +5,75 @@ import {
   Form,
   Image,
   Input,
+  InputNumber,
   Layout,
   Menu,
   Modal,
   Result,
+  Select,
   Space,
   Spin,
   Switch,
   Table,
+  Upload,
+  message,
   notification,
 } from 'antd';
 import {
   DeleteOutlined,
   EditOutlined,
+  FileOutlined,
+  PictureOutlined,
   ReloadOutlined,
 } from '@ant-design/icons';
+import type { UploadChangeParam, UploadFile } from 'antd/es/upload/interface';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 
 import { AxiosInstance } from 'axios';
 import type { ColumnsType } from 'antd/es/table';
 import { ErrorBoundary } from 'react-error-boundary';
+import type { RcFile } from 'antd/es/upload';
+import type { ReactNode } from 'react';
 import type { Rule } from 'antd/es/form';
-import validator from 'validator';
 
 const { Sider, Content } = Layout;
+
+interface ValidationResult {
+  status: boolean;
+  message?: string;
+}
 
 export interface FieldConfig {
   key: string;
   label: string;
-  type: string;
-  isNullable: boolean;
-  isPostable: boolean;
-  isPutable: boolean;
-  isPatchable: boolean;
-  shouldShowInListView: boolean;
+  type:
+    | 'text'
+    | 'textarea'
+    | 'number'
+    | 'email'
+    | 'select'
+    | 'date'
+    | 'boolean'
+    | 'url';
+  options?: { label: string; value: string }[];
+  isId?: boolean;
+  isRequired?: boolean;
+  isReadOnly?: boolean;
+  isFile?: boolean;
+  isImage?: boolean;
+  maxSize?: number;
+  uploadUrl?: string;
+  isNullable?: boolean;
+  isPatchable?: boolean;
+  isPutable?: boolean;
+  isPostable?: boolean;
+  shouldShowInListView?: boolean;
+  accept?: string;
   placeHolder?: string;
-  validator?:
-    | string
-    | ((value: unknown) => { status: boolean; message?: string });
-  relation?: {
-    url: string;
-    column: string;
-  };
-  renderInList?: (value: unknown, record: Item) => React.ReactNode;
-  renderInDetail?: (value: unknown, record: Item) => React.ReactNode;
+  validator?: (value: unknown) => ValidationResult;
+  renderInList?: (value: string | number | boolean | null) => ReactNode;
+  renderInDetail?: (value: string | number | boolean | null) => ReactNode;
 }
 
 export interface EndpointConfig {
@@ -58,14 +82,10 @@ export interface EndpointConfig {
   url: string;
   idField?: string;
   fields: FieldConfig[];
-  validator?: (formData: Record<string, unknown>) => {
-    status: boolean;
-    message?: string;
-  };
+  validator: (values: Record<string, unknown>) => Record<string, string>;
 }
 
 interface Item {
-  id: string;
   [key: string]: unknown;
 }
 
@@ -97,8 +117,6 @@ export default function ItemCrud({
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [selectedEndpoint, setSelectedEndpoint] =
     useState<EndpointConfig | null>(null);
-  const [retryCount, setRetryCount] = useState(0);
-  const MAX_RETRIES = 3;
   const [pagination, setPagination] = useState({
     current: 1,
     pageSize: 10,
@@ -121,93 +139,88 @@ export default function ItemCrud({
     item: Item | null;
   }>({ type: null, item: null });
 
-  const fetchItems = useCallback(
-    async (retry = false) => {
-      console.log('Fetching items:', { selectedEndpoint, operation, id });
-      if (!selectedEndpoint) {
-        console.log('No selected endpoint');
-        return;
-      }
+  const fetchItems = useCallback(async () => {
+    if (!selectedEndpoint) {
+      return;
+    }
 
-      try {
-        setLoading(true);
-        setError(null);
-        const response = await apiClient.get(selectedEndpoint.url, {
-          params: {
-            page: pagination.current,
-            limit: pagination.pageSize,
-          },
-        });
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await apiClient.get(selectedEndpoint.url, {
+        params: {
+          page: pagination.current,
+          limit: pagination.pageSize,
+        },
+      });
 
-        // Handle both array and paginated response formats
-        const itemsData = response.data.data || response.data;
-        const total =
-          response.data.count || response.data.total || itemsData.length;
+      // Handle both array and paginated response formats
+      const itemsData = response.data.data || response.data;
+      const total =
+        response.data.count || response.data.total || itemsData.length;
 
-        console.log('Fetched items:', itemsData);
-        setItems(itemsData);
-        setPagination((prev) => ({
-          ...prev,
-          total: total,
-        }));
-        setRetryCount(0);
-
-        // After fetching items, check if we need to show a modal
-        if (operation && id) {
-          console.log('Checking for modal after fetch:', { operation, id });
-          const item = itemsData.find(
-            (item: Item) =>
-              String(item[selectedEndpoint.idField || 'id']) === id
-          );
-          if (item) {
-            console.log('Found item in fetched data:', item);
-            setModalState({ type: operation, item });
-          } else {
-            console.log(
-              'Item not found in fetched data, fetching individually'
-            );
-            fetchItemById(id);
+      // Ensure each item has the ID field properly mapped
+      const processedItems = itemsData.map((item: Item) => {
+        const idField = selectedEndpoint.idField;
+        if (idField && !item[idField]) {
+          // If the ID field is configured but missing in the item, try to find it
+          const possibleIdFields = ['id', 'uid', '_id'];
+          for (const field of possibleIdFields) {
+            if (item[field]) {
+              item[idField] = item[field];
+              break;
+            }
           }
         }
-      } catch (err) {
-        const errorMessage =
-          err instanceof Error ? err.message : 'Unknown error occurred';
-        console.error('Error fetching items:', errorMessage);
-        setError(errorMessage);
+        return item;
+      });
 
-        if (retry && retryCount < MAX_RETRIES) {
-          setRetryCount((prev) => prev + 1);
-          setTimeout(() => fetchItems(true), 1000 * retryCount);
-        } else {
-          api.error({
-            message: 'Error',
-            description: `Failed to fetch items: ${errorMessage}`,
-            duration: 5,
-            placement: 'topRight',
-          });
-        }
-      } finally {
-        setLoading(false);
-      }
-    },
-    [
-      selectedEndpoint,
-      retryCount,
-      api,
-      apiClient,
-      operation,
-      id,
-      pagination.current,
-      pagination.pageSize,
-    ]
-  );
+      setItems(processedItems);
+      setPagination((prev) => ({
+        ...prev,
+        total: total,
+      }));
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : 'Unknown error occurred';
+      setError(errorMessage);
+      api.error({
+        message: 'Error',
+        description: `Failed to fetch items: ${errorMessage}`,
+        duration: 5,
+        placement: 'topRight',
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, [
+    selectedEndpoint,
+    api,
+    apiClient,
+    pagination.current,
+    pagination.pageSize,
+  ]);
 
   const handleRowClick = (record: Item, event: React.MouseEvent) => {
     const target = event.target as HTMLElement;
-    if (target.closest('button')) {
+    // Check if the click is on a button, image, or file link
+    if (
+      target.closest('button') ||
+      target.closest('img') ||
+      target.closest('a')
+    ) {
       return;
     }
-    const idField = selectedEndpoint?.idField || 'id';
+    const idField = selectedEndpoint?.idField;
+    if (!idField) {
+      api.error({
+        message: 'Error',
+        description: 'ID field is not configured',
+        duration: 5,
+        placement: 'topRight',
+      });
+      return;
+    }
     const itemId = record[idField];
     if (!itemId) {
       api.error({
@@ -218,13 +231,21 @@ export default function ItemCrud({
       });
       return;
     }
-    console.log('Navigating to view:', itemId);
     navigate(`/${entity}/view/${itemId}`, { replace: true });
   };
 
   const handleEdit = async (item: Item) => {
     if (!selectedEndpoint) return;
-    const idField = selectedEndpoint.idField || 'id';
+    const idField = selectedEndpoint.idField;
+    if (!idField) {
+      api.error({
+        message: 'Error',
+        description: 'ID field is not configured',
+        duration: 5,
+        placement: 'topRight',
+      });
+      return;
+    }
     const itemId = item[idField];
     if (!itemId) {
       api.error({
@@ -235,20 +256,40 @@ export default function ItemCrud({
       });
       return;
     }
-    console.log('Navigating to edit:', itemId);
     navigate(`/${entity}/edit/${itemId}`, { replace: true });
   };
 
   const handleModalClose = () => {
-    console.log('Closing modal');
     setModalState({ type: null, item: null });
     navigate(`/${entity}`, { replace: true });
   };
 
   const handleDetailModalClose = () => {
-    console.log('Closing detail modal');
     setModalState({ type: null, item: null });
+    setSelectedItem(null);
+    setDetailModalVisible(false);
     navigate(`/${entity}`, { replace: true });
+  };
+
+  const handleEditFromDetail = () => {
+    setDetailModalVisible(false);
+    setSelectedItem(null);
+
+    const idField = selectedEndpoint?.idField;
+    if (!idField) {
+      api.error({
+        message: 'Error',
+        description: 'ID field is not configured',
+        duration: 5,
+        placement: 'topRight',
+      });
+      return;
+    }
+    if (modalState.item && modalState.item[idField]) {
+      navigate(`/${entity}/edit/${modalState.item[idField]}`, {
+        replace: true,
+      });
+    }
   };
 
   // Main effect to handle URL parameters and data fetching
@@ -256,17 +297,12 @@ export default function ItemCrud({
     let isSubscribed = true;
 
     const loadData = async () => {
-      console.log('URL params effect triggered:', { entity, operation, id });
-
       if (entity) {
         const endpoint = config.endpoints.find((e) => e.key === entity);
         if (endpoint && isSubscribed) {
-          console.log('Setting endpoint:', endpoint.key);
-
           // Only reset pagination if the entity has changed
           const prevEntity = selectedEndpoint?.key;
           if (prevEntity !== entity) {
-            console.log('Entity changed, resetting pagination');
             setPagination({
               current: 1,
               pageSize: 10,
@@ -276,8 +312,13 @@ export default function ItemCrud({
 
           setSelectedEndpoint(endpoint);
 
-          // Fetch items for the new endpoint
-          fetchItems();
+          // If we're viewing or editing a specific item, fetch it directly
+          if (operation && id) {
+            fetchItemById(id);
+          } else {
+            // Otherwise fetch the list of items
+            fetchItems();
+          }
         }
       } else if (config.endpoints.length > 0) {
         navigate(`/${config.endpoints[0].key}`, { replace: true });
@@ -293,25 +334,27 @@ export default function ItemCrud({
 
   // Effect to handle modal visibility based on modalState
   useEffect(() => {
-    console.log('Modal state changed:', modalState);
     if (modalState.type && modalState.item) {
       if (modalState.type === 'view') {
-        console.log('Setting view modal');
         setSelectedItem(modalState.item);
         setDetailModalVisible(true);
+        setIsModalVisible(false); // Ensure edit modal is closed
+        setEditingItem(null); // Clear any editing state
+        form.resetFields(); // Clear form state
       } else if (modalState.type === 'edit') {
-        console.log('Setting edit modal');
         setEditingItem(modalState.item);
         form.setFieldsValue(modalState.item);
         setIsModalVisible(true);
+        setDetailModalVisible(false); // Ensure detail modal is closed
+        setSelectedItem(null); // Clear detail view state
       }
     } else if (!operation || !id) {
       // Only clear modals if we're not supposed to show one
-      console.log('Clearing modals');
       setDetailModalVisible(false);
       setSelectedItem(null);
       setIsModalVisible(false);
       setEditingItem(null);
+      form.resetFields();
     }
   }, [modalState, form, operation, id]);
 
@@ -350,30 +393,47 @@ export default function ItemCrud({
   ]);
 
   const fetchItemById = async (itemId: string) => {
-    console.log('Fetching item by ID:', itemId);
     if (!selectedEndpoint || !operation) {
-      console.log('Missing required params for fetchItemById:', {
-        selectedEndpoint,
-        operation,
-      });
       return;
     }
     try {
       setLoading(true);
+      setError(null);
+
+      // Clear existing state
+      if (operation === 'edit') {
+        setDetailModalVisible(false);
+        setSelectedItem(null);
+      } else {
+        setIsModalVisible(false);
+        setEditingItem(null);
+        form.resetFields();
+      }
+
       const response = await apiClient.get(`${selectedEndpoint.url}/${itemId}`);
       const itemData = response.data.data || response.data;
-      console.log('Fetched item data:', itemData);
+
+      // Set the modal state based on the operation type
       setModalState({ type: operation, item: itemData });
+
+      // Additional state updates based on operation
+      if (operation === 'edit') {
+        setEditingItem(itemData);
+        form.setFieldsValue(itemData);
+      } else if (operation === 'view') {
+        setSelectedItem(itemData);
+      }
     } catch (err) {
       const errorMessage =
         err instanceof Error ? err.message : 'Unknown error occurred';
-      console.error('Error fetching item:', errorMessage);
+      setError(errorMessage);
       api.error({
         message: 'Error',
         description: `Failed to fetch item: ${errorMessage}`,
         duration: 5,
         placement: 'topRight',
       });
+      // Navigate back to the list view on error
       navigate(`/${entity}`);
     } finally {
       setLoading(false);
@@ -386,20 +446,65 @@ export default function ItemCrud({
     try {
       setLoading(true);
       setError(null);
-      console.log('Submitting form with values:', values);
+
+      // Check if there are any file fields
+      const hasFileFields = selectedEndpoint.fields.some(
+        (field) =>
+          (field.isFile || field.isImage) && values[field.key] instanceof File
+      );
+
+      let requestData;
+      let headers = {};
+
+      if (hasFileFields) {
+        // Create FormData for file uploads
+        const formData = new FormData();
+
+        // Add all form values to FormData
+        Object.entries(values).forEach(([key, value]) => {
+          if (value instanceof File) {
+            // Handle File objects
+            formData.append(key, value);
+          } else if (typeof value === 'object' && value !== null) {
+            // Handle objects (convert to JSON string)
+            formData.append(key, JSON.stringify(value));
+          } else {
+            // Find the field configuration to check its type
+            const field = selectedEndpoint.fields.find((f) => f.key === key);
+            if (field?.type === 'number') {
+              // For number fields, convert to number before appending
+              formData.append(key, String(Number(value)));
+            } else {
+              // For other primitive values
+              formData.append(key, String(value));
+            }
+          }
+        });
+
+        requestData = formData;
+        // Let the browser set the correct Content-Type with boundary for FormData
+      } else {
+        // For non-file submissions, use JSON
+        requestData = values;
+        headers = {
+          'Content-Type': 'application/json',
+        };
+      }
 
       if (editingItem) {
-        const idField = selectedEndpoint.idField || 'id';
+        const idField = selectedEndpoint.idField;
+        if (!idField) {
+          throw new Error('ID field is not configured');
+        }
         const itemId = editingItem[idField];
         if (!itemId) {
           throw new Error('Item ID is missing');
         }
-        console.log('Updating item with ID:', itemId);
-        const response = await apiClient.patch(
+        await apiClient.patch(
           `${selectedEndpoint.url}/${itemId}`,
-          values
+          requestData,
+          { headers }
         );
-        console.log('Update response:', response.data);
         api.success({
           message: 'Success',
           description: 'Item updated successfully',
@@ -407,9 +512,9 @@ export default function ItemCrud({
           placement: 'topRight',
         });
       } else {
-        console.log('Creating new item');
-        const response = await apiClient.post(selectedEndpoint.url, values);
-        console.log('Create response:', response.data);
+        await apiClient.post(selectedEndpoint.url, requestData, {
+          headers,
+        });
         api.success({
           message: 'Success',
           description: 'Item created successfully',
@@ -423,7 +528,6 @@ export default function ItemCrud({
     } catch (err) {
       const errorMessage =
         err instanceof Error ? err.message : 'Unknown error occurred';
-      console.error('Error submitting form:', err);
       setError(errorMessage);
       api.error({
         message: 'Error',
@@ -475,49 +579,98 @@ export default function ItemCrud({
     }
   };
 
+  const renderValue = (value: unknown): string | number | boolean | null => {
+    if (value === null || value === undefined) {
+      return null;
+    }
+    if (
+      typeof value === 'string' ||
+      typeof value === 'number' ||
+      typeof value === 'boolean'
+    ) {
+      return value;
+    }
+    return String(value);
+  };
+
   const renderFormField = (field: FieldConfig) => {
     const rules: Rule[] = [
       { required: !field.isNullable, message: `${field.label} is required` },
     ];
 
     if (field.validator) {
-      if (typeof field.validator === 'string') {
-        const validatorFn =
-          validator[field.validator as keyof typeof validator];
-        if (typeof validatorFn === 'function') {
-          rules.push({
-            validator: async (_: unknown, value: unknown) => {
-              if (typeof value !== 'string') {
-                throw new Error('Value must be a string');
-              }
-              const isValid = (validatorFn as (str: string) => boolean)(value);
-              if (!isValid) {
-                const errorMessage =
-                  validator[
-                    `${field.validator}Message` as keyof typeof validator
-                  ];
-                if (typeof errorMessage === 'string') {
-                  throw new Error(errorMessage);
-                }
-                throw new Error(`Invalid ${field.label}`);
-              }
-            },
-          });
-        }
-      } else {
-        const validatorFn = field.validator;
-        rules.push({
-          validator: async (_: unknown, value: unknown) => {
-            const result = validatorFn(value);
-            if (!result.status) {
-              throw new Error(result.message || 'Invalid value');
-            }
-          },
-        });
-      }
+      const validatorFn = field.validator;
+      rules.push({
+        validator: async (_: unknown, value: unknown) => {
+          const validationResult = validatorFn(value);
+          if (!validationResult.status) {
+            throw new Error(validationResult.message || 'Invalid value');
+          }
+        },
+      });
     }
 
-    const isDisabled = Boolean(editingItem) && !field.isPatchable;
+    // Only disable fields that are explicitly marked as read-only
+    const isDisabled = field.isReadOnly === true;
+
+    // Handle file and image uploads
+    if (field.isFile || field.isImage) {
+      const currentValue = form.getFieldValue(field.key);
+      const uploadFileList: UploadFile[] = currentValue
+        ? [
+            {
+              uid: '-1',
+              name: field.key,
+              status: 'done',
+              url: currentValue,
+            },
+          ]
+        : [];
+
+      const uploadProps = {
+        name: field.key,
+        action: field.uploadUrl || `${selectedEndpoint?.url}/upload`,
+        headers: {
+          authorization: 'Bearer your-token',
+        },
+        onChange(info: UploadChangeParam) {
+          if (info.file.status === 'uploading') {
+            // Just store the file in the form state without uploading
+            form.setFieldValue(field.key, info.file.originFileObj);
+          } else if (info.file.status === 'done') {
+            message.success(`${info.file.name} file selected successfully`);
+            // Set the file in the form
+            form.setFieldValue(field.key, info.file.originFileObj);
+          } else if (info.file.status === 'error') {
+            message.error(`${info.file.name} file selection failed.`);
+          }
+        },
+        beforeUpload(file: RcFile) {
+          // Check file size
+          if (field.maxSize && file.size / 1024 / 1024 > field.maxSize) {
+            message.error(`File must be smaller than ${field.maxSize}MB!`);
+            return false;
+          }
+          // Prevent automatic upload
+          return false;
+        },
+        accept: field.accept || (field.isImage ? 'image/*' : undefined),
+        maxCount: 1,
+        fileList: uploadFileList,
+        // Remove customRequest to prevent automatic upload
+      };
+
+      return (
+        <Form.Item name={field.key} label={field.label} rules={rules}>
+          <Upload {...uploadProps}>
+            <Button
+              icon={field.isImage ? <PictureOutlined /> : <FileOutlined />}>
+              {field.isImage ? 'Select Image' : 'Select File'}
+            </Button>
+          </Upload>
+        </Form.Item>
+      );
+    }
 
     switch (field.type) {
       case 'boolean':
@@ -569,11 +722,37 @@ export default function ItemCrud({
               ...rules,
               { type: 'number', message: 'Please enter a valid number' },
             ]}>
-            <Input
-              type='number'
+            <InputNumber
               placeholder={field.placeHolder}
               disabled={isDisabled}
+              style={{ width: '100%' }}
+              min={0}
             />
+          </Form.Item>
+        );
+      case 'textarea':
+        return (
+          <Form.Item name={field.key} label={field.label} rules={rules}>
+            <Input.TextArea
+              placeholder={field.placeHolder}
+              disabled={isDisabled}
+              rows={4}
+            />
+          </Form.Item>
+        );
+      case 'select':
+        return (
+          <Form.Item name={field.key} label={field.label} rules={rules}>
+            <Select
+              placeholder={field.placeHolder || `Select ${field.label}`}
+              disabled={isDisabled}
+              allowClear>
+              {field.options?.map((option) => (
+                <Select.Option key={option.value} value={option.value}>
+                  {option.label}
+                </Select.Option>
+              ))}
+            </Select>
           </Form.Item>
         );
       default:
@@ -593,15 +772,39 @@ export default function ItemCrud({
             title: field.label,
             dataIndex: field.key,
             key: field.key,
-            render: (value: unknown, record: Item) => {
+            render: (value: unknown) => {
               if (field.renderInList) {
-                return field.renderInList(value, record);
+                return field.renderInList(
+                  renderValue(value) as string | number | boolean | null
+                );
+              }
+
+              if (field.isImage && value) {
+                return (
+                  <div onClick={(e) => e.stopPropagation()}>
+                    <Image width={40} src={renderValue(value) as string} />
+                  </div>
+                );
+              }
+
+              if (field.isFile && value) {
+                return (
+                  <Button
+                    icon={<FileOutlined />}
+                    size='small'
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      window.open(renderValue(value) as string, '_blank');
+                    }}>
+                    View File
+                  </Button>
+                );
               }
 
               if (field.type === 'boolean') {
                 return (
                   <Switch
-                    checked={Boolean(value)}
+                    checked={Boolean(renderValue(value))}
                     checkedChildren='Yes'
                     unCheckedChildren='No'
                     disabled
@@ -609,16 +812,19 @@ export default function ItemCrud({
                 );
               }
               if (field.type === 'url' && value) {
-                return <Image width={40} src={value as string} />;
+                return <Image width={40} src={renderValue(value) as string} />;
               }
-              return value as React.ReactNode;
+              return renderValue(value) as React.ReactNode;
             },
           })),
         {
           title: 'Actions',
           key: 'actions',
           render: (_: unknown, record: Item) => {
-            const idField = selectedEndpoint.idField || 'id';
+            const idField = selectedEndpoint.idField;
+            if (!idField) {
+              return null;
+            }
             return (
               <Space>
                 <Button
@@ -700,12 +906,7 @@ export default function ItemCrud({
           <Space>
             <Button onClick={handleDetailModalClose}>Close</Button>
             {selectedItem && selectedEndpoint && (
-              <Button
-                type='primary'
-                onClick={() => {
-                  const idField = selectedEndpoint.idField || 'id';
-                  navigate(`/${entity}/edit/${selectedItem[idField]}`);
-                }}>
+              <Button type='primary' onClick={handleEditFromDetail}>
                 Edit
               </Button>
             )}
@@ -719,9 +920,19 @@ export default function ItemCrud({
             let displayValue: React.ReactNode = '';
 
             if (field.renderInDetail) {
-              displayValue = field.renderInDetail(value, selectedItem);
+              displayValue = field.renderInDetail(renderValue(value));
             } else {
-              if (field.type === 'boolean') {
+              if (field.isImage && value) {
+                displayValue = <Image width={200} src={String(value)} />;
+              } else if (field.isFile && value) {
+                displayValue = (
+                  <Button
+                    icon={<FileOutlined />}
+                    onClick={() => window.open(String(value), '_blank')}>
+                    Download File
+                  </Button>
+                );
+              } else if (field.type === 'boolean') {
                 displayValue = value ? 'Yes' : 'No';
               } else if (field.type === 'url' && value) {
                 displayValue = <Image width={100} src={String(value)} />;
@@ -756,9 +967,19 @@ export default function ItemCrud({
             let displayValue: React.ReactNode = '';
 
             if (field.renderInDetail) {
-              displayValue = field.renderInDetail(value, selectedItem);
+              displayValue = field.renderInDetail(renderValue(value));
             } else {
-              if (field.type === 'boolean') {
+              if (field.isImage && value) {
+                displayValue = <Image width={200} src={String(value)} />;
+              } else if (field.isFile && value) {
+                displayValue = (
+                  <Button
+                    icon={<FileOutlined />}
+                    onClick={() => window.open(String(value), '_blank')}>
+                    Download File
+                  </Button>
+                );
+              } else if (field.type === 'boolean') {
                 displayValue = value ? 'Yes' : 'No';
               } else if (field.type === 'url' && value) {
                 displayValue = <Image width={100} src={String(value)} />;
@@ -779,12 +1000,7 @@ export default function ItemCrud({
           <div style={{ marginTop: '16px', textAlign: 'right' }}>
             <Space>
               <Button onClick={handleDetailModalClose}>Close</Button>
-              <Button
-                type='primary'
-                onClick={() => {
-                  const idField = selectedEndpoint.idField || 'id';
-                  navigate(`/${entity}/edit/${selectedItem[idField]}`);
-                }}>
+              <Button type='primary' onClick={handleEditFromDetail}>
                 Edit
               </Button>
             </Space>
@@ -823,8 +1039,8 @@ export default function ItemCrud({
           {selectedEndpoint?.fields
             .filter((field) =>
               editingItem
-                ? field.isPutable || field.isPatchable
-                : field.isPostable
+                ? field.isPutable || field.isPatchable || !field.isReadOnly
+                : field.isPostable || !field.isReadOnly
             )
             .map((field) => (
               <div key={field.key}>{renderFormField(field)}</div>
@@ -848,8 +1064,8 @@ export default function ItemCrud({
           {selectedEndpoint?.fields
             .filter((field) =>
               editingItem
-                ? field.isPutable || field.isPatchable
-                : field.isPostable
+                ? field.isPutable || field.isPatchable || !field.isReadOnly
+                : field.isPostable || !field.isReadOnly
             )
             .map((field) => (
               <div key={field.key}>{renderFormField(field)}</div>
@@ -878,9 +1094,6 @@ export default function ItemCrud({
     pageSize?: number;
     total?: number;
   }) => {
-    console.log('Table change:', newPagination);
-
-    // Only update if the values have actually changed
     if (
       newPagination.current !== pagination.current ||
       newPagination.pageSize !== pagination.pageSize
@@ -891,7 +1104,6 @@ export default function ItemCrud({
         pageSize: newPagination.pageSize || prev.pageSize,
       }));
 
-      // Fetch new items with updated pagination
       fetchItems();
     }
   };
@@ -967,7 +1179,7 @@ export default function ItemCrud({
                 </div>
                 <Button
                   type='primary'
-                  onClick={() => fetchItems(true)}
+                  onClick={() => fetchItems()}
                   icon={<ReloadOutlined />}>
                   Retry
                 </Button>
