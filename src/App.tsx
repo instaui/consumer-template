@@ -11,6 +11,9 @@ function App() {
     headers: { Authorization: 'Bearer your-token' },
   });
 
+  // You can toggle this to switch between Modal and Drawer
+  const useDrawer = true;
+
   const config: { endpoints: EndpointConfig[] } = {
     endpoints: [
       {
@@ -414,11 +417,23 @@ function App() {
                 <Route path='/' element={<Navigate to='/users' replace />} />
                 <Route
                   path='/:entity'
-                  element={<ItemCrud apiClient={apiClient} config={config} />}
+                  element={
+                    <ItemCrud
+                      apiClient={apiClient}
+                      config={config}
+                      useDrawer={useDrawer}
+                    />
+                  }
                 />
                 <Route
                   path='/:entity/:operation/:id'
-                  element={<ItemCrud apiClient={apiClient} config={config} />}
+                  element={
+                    <ItemCrud
+                      apiClient={apiClient}
+                      config={config}
+                      useDrawer={useDrawer}
+                    />
+                  }
                 />
               </Routes>
             </div>

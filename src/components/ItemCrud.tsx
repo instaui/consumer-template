@@ -1,6 +1,7 @@
 import {
   Button,
   Card,
+  Drawer,
   Form,
   Image,
   Input,
@@ -71,9 +72,14 @@ interface ItemCrudProps {
   config: {
     endpoints: EndpointConfig[];
   };
+  useDrawer?: boolean;
 }
 
-export default function ItemCrud({ apiClient, config }: ItemCrudProps) {
+export default function ItemCrud({
+  apiClient,
+  config,
+  useDrawer = false,
+}: ItemCrudProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const { entity, operation, id } = useParams<{
@@ -667,7 +673,57 @@ export default function ItemCrud({ apiClient, config }: ItemCrudProps) {
     </Modal>
   );
 
-  const DetailModal = (
+  const DetailModal = useDrawer ? (
+    <Drawer
+      title='Item Details'
+      open={detailModalVisible}
+      onClose={handleDetailModalClose}
+      width={800}
+      placement='right'
+      footer={
+        <div style={{ textAlign: 'right' }}>
+          <Space>
+            <Button onClick={handleDetailModalClose}>Close</Button>
+            {selectedItem && selectedEndpoint && (
+              <Button
+                type='primary'
+                onClick={() => {
+                  const idField = selectedEndpoint.idField || 'id';
+                  navigate(`/${entity}/edit/${selectedItem[idField]}`);
+                }}>
+                Edit
+              </Button>
+            )}
+          </Space>
+        </div>
+      }>
+      {selectedItem && selectedEndpoint && (
+        <div>
+          {selectedEndpoint.fields.map((field) => {
+            const value = selectedItem[field.key];
+            let displayValue: React.ReactNode = '';
+
+            if (field.type === 'boolean') {
+              displayValue = value ? 'Yes' : 'No';
+            } else if (field.type === 'url' && value) {
+              displayValue = <Image width={100} src={String(value)} />;
+            } else if (value !== null && value !== undefined) {
+              displayValue = String(value);
+            }
+
+            return (
+              <div key={field.key} style={{ marginBottom: '16px' }}>
+                <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>
+                  {field.label}:
+                </div>
+                <div>{displayValue}</div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </Drawer>
+  ) : (
     <Modal
       title='Item Details'
       open={detailModalVisible}
@@ -715,7 +771,38 @@ export default function ItemCrud({ apiClient, config }: ItemCrudProps) {
     </Modal>
   );
 
-  const EditModal = (
+  const EditModal = useDrawer ? (
+    <Drawer
+      title={editingItem ? 'Edit Item' : 'Add New Item'}
+      open={isModalVisible}
+      onClose={handleModalClose}
+      width={600}
+      placement='right'
+      footer={
+        <div style={{ textAlign: 'right' }}>
+          <Space>
+            <Button type='primary' htmlType='submit'>
+              {editingItem ? 'Update' : 'Add'} Item
+            </Button>
+            <Button onClick={handleModalClose}>Cancel</Button>
+          </Space>
+        </div>
+      }>
+      <Spin spinning={loading}>
+        <Form form={form} layout='vertical' onFinish={handleSubmit}>
+          {selectedEndpoint?.fields
+            .filter((field) =>
+              editingItem
+                ? field.isPutable || field.isPatchable
+                : field.isPostable
+            )
+            .map((field) => (
+              <div key={field.key}>{renderFormField(field)}</div>
+            ))}
+        </Form>
+      </Spin>
+    </Drawer>
+  ) : (
     <Modal
       title={editingItem ? 'Edit Item' : 'Add New Item'}
       open={isModalVisible}
