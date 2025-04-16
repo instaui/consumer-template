@@ -5,6 +5,54 @@ import type { EndpointConfig } from './components/ItemCrud';
 import ItemCrud from './components/ItemCrud';
 import axios from 'axios';
 
+// Helper functions for custom rendering
+const formatCurrency = (value: unknown): React.ReactNode => {
+  if (typeof value === 'number') {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+    }).format(value);
+  }
+  return String(value);
+};
+
+const formatDate = (value: unknown): React.ReactNode => {
+  if (typeof value === 'string') {
+    try {
+      const date = new Date(value);
+      return date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+      });
+    } catch {
+      return String(value);
+    }
+  }
+  return String(value);
+};
+
+const formatStatus = (value: unknown): React.ReactNode => {
+  if (typeof value === 'string') {
+    const statusMap: Record<string, { color: string; text: string }> = {
+      active: { color: 'green', text: 'Active' },
+      inactive: { color: 'red', text: 'Inactive' },
+      pending: { color: 'orange', text: 'Pending' },
+    };
+
+    const status = statusMap[value.toLowerCase()] || {
+      color: 'default',
+      text: String(value),
+    };
+    return (
+      <span style={{ color: status.color, fontWeight: 'bold' }}>
+        {status.text}
+      </span>
+    );
+  }
+  return String(value);
+};
+
 function App() {
   const apiClient = axios.create({
     baseURL: 'http://localhost:3000',
@@ -58,7 +106,7 @@ function App() {
           },
           {
             key: 'email',
-            label: 'Emailaaa',
+            label: 'Email',
             placeHolder: 'Enter email',
             type: 'string',
             validator: 'isEmail',
@@ -99,6 +147,8 @@ function App() {
             isPutable: true,
             isPatchable: true,
             shouldShowInListView: true,
+            renderInList: (value) => formatStatus(value),
+            renderInDetail: (value) => formatStatus(value),
           },
         ],
         validator: (formData: Record<string, unknown>) => {
@@ -216,6 +266,8 @@ function App() {
             isPutable: true,
             isPatchable: true,
             shouldShowInListView: true,
+            renderInList: (value) => formatStatus(value),
+            renderInDetail: (value) => formatStatus(value),
           },
           {
             key: 'user',
@@ -272,9 +324,9 @@ function App() {
             shouldShowInListView: true,
           },
           {
-            key: 'fname',
-            label: 'First Name',
-            placeHolder: 'Enter first name',
+            key: 'name',
+            label: 'Name',
+            placeHolder: 'Enter item name',
             type: 'text',
             validator: 'string',
             isNullable: false,
@@ -284,30 +336,17 @@ function App() {
             shouldShowInListView: true,
           },
           {
-            key: 'lname',
-            label: 'Last Name',
-            placeHolder: 'Enter last name',
-            type: 'text',
-            validator: 'string',
-            isNullable: false,
-            isPostable: true,
-            isPutable: true,
-            isPatchable: true,
-            shouldShowInListView: true,
-          },
-          {
-            key: 'email',
-            label: 'Email',
-            placeHolder: 'Enter email',
-            type: 'email',
+            key: 'price',
+            label: 'Price',
+            placeHolder: 'Enter price',
+            type: 'number',
             validator: (value: unknown) => {
-              const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-              if (typeof value === 'string' && emailRegex.test(value)) {
+              if (typeof value === 'number' && value >= 0) {
                 return { status: true };
               }
               return {
                 status: false,
-                message: 'Please enter a valid email address',
+                message: 'Price must be a positive number',
               };
             },
             isNullable: false,
@@ -315,72 +354,45 @@ function App() {
             isPutable: true,
             isPatchable: true,
             shouldShowInListView: true,
+            renderInList: (value) => formatCurrency(value),
+            renderInDetail: (value) => formatCurrency(value),
           },
           {
-            key: 'photo',
-            label: 'Photo URL',
-            placeHolder: 'Enter photo URL',
-            type: 'url',
-            validator: (value: unknown) => {
-              if (typeof value === 'string') {
-                try {
-                  new URL(value);
-                  return { status: true };
-                } catch {
-                  return { status: false, message: 'Please enter a valid URL' };
-                }
-              }
-              return { status: false, message: 'Please enter a valid URL' };
-            },
+            key: 'createdAt',
+            label: 'Created At',
+            type: 'text',
             isNullable: true,
-            isPostable: true,
-            isPutable: true,
-            isPatchable: true,
-            shouldShowInListView: false,
+            isPostable: false,
+            isPutable: false,
+            isPatchable: false,
+            shouldShowInListView: true,
+            renderInList: (value) => formatDate(value),
+            renderInDetail: (value) => formatDate(value),
           },
           {
             key: 'status',
             label: 'Status',
-            type: 'boolean',
+            type: 'text',
             isNullable: true,
             isPostable: true,
             isPutable: true,
             isPatchable: true,
             shouldShowInListView: true,
-          },
-          {
-            key: 'user',
-            label: 'User',
-            type: 'relation',
-            isNullable: true,
-            isPostable: true,
-            isPutable: true,
-            isPatchable: true,
-            shouldShowInListView: true,
-            relation: {
-              url: '/users',
-              column: 'id',
-            },
+            renderInList: (value) => formatStatus(value),
+            renderInDetail: (value) => formatStatus(value),
           },
         ],
         validator: (formData: Record<string, unknown>) => {
-          if (!formData.fname) {
-            return { status: false, message: 'First name is required' };
+          if (!formData.name) {
+            return { status: false, message: 'Name is required' };
           }
-          if (!formData.lname) {
-            return { status: false, message: 'Last name is required' };
+          if (!formData.price) {
+            return { status: false, message: 'Price is required' };
           }
-          if (!formData.email) {
-            return { status: false, message: 'Email is required' };
-          }
-          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-          if (
-            typeof formData.email === 'string' &&
-            !emailRegex.test(formData.email)
-          ) {
+          if (typeof formData.price !== 'number' || formData.price < 0) {
             return {
               status: false,
-              message: 'Please enter a valid email address',
+              message: 'Price must be a positive number',
             };
           }
           return { status: true };

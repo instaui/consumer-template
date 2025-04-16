@@ -48,6 +48,8 @@ export interface FieldConfig {
     url: string;
     column: string;
   };
+  renderInList?: (value: unknown, record: Item) => React.ReactNode;
+  renderInDetail?: (value: unknown, record: Item) => React.ReactNode;
 }
 
 export interface EndpointConfig {
@@ -582,7 +584,11 @@ export default function ItemCrud({
             title: field.label,
             dataIndex: field.key,
             key: field.key,
-            render: (value: unknown) => {
+            render: (value: unknown, record: Item) => {
+              if (field.renderInList) {
+                return field.renderInList(value, record);
+              }
+
               if (field.type === 'boolean') {
                 return (
                   <Switch
@@ -703,12 +709,16 @@ export default function ItemCrud({
             const value = selectedItem[field.key];
             let displayValue: React.ReactNode = '';
 
-            if (field.type === 'boolean') {
-              displayValue = value ? 'Yes' : 'No';
-            } else if (field.type === 'url' && value) {
-              displayValue = <Image width={100} src={String(value)} />;
-            } else if (value !== null && value !== undefined) {
-              displayValue = String(value);
+            if (field.renderInDetail) {
+              displayValue = field.renderInDetail(value, selectedItem);
+            } else {
+              if (field.type === 'boolean') {
+                displayValue = value ? 'Yes' : 'No';
+              } else if (field.type === 'url' && value) {
+                displayValue = <Image width={100} src={String(value)} />;
+              } else if (value !== null && value !== undefined) {
+                displayValue = String(value);
+              }
             }
 
             return (
@@ -736,12 +746,16 @@ export default function ItemCrud({
             const value = selectedItem[field.key];
             let displayValue: React.ReactNode = '';
 
-            if (field.type === 'boolean') {
-              displayValue = value ? 'Yes' : 'No';
-            } else if (field.type === 'url' && value) {
-              displayValue = <Image width={100} src={String(value)} />;
-            } else if (value !== null && value !== undefined) {
-              displayValue = String(value);
+            if (field.renderInDetail) {
+              displayValue = field.renderInDetail(value, selectedItem);
+            } else {
+              if (field.type === 'boolean') {
+                displayValue = value ? 'Yes' : 'No';
+              } else if (field.type === 'url' && value) {
+                displayValue = <Image width={100} src={String(value)} />;
+              } else if (value !== null && value !== undefined) {
+                displayValue = String(value);
+              }
             }
 
             return (
