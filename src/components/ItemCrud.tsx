@@ -19,7 +19,7 @@ import {
   EditOutlined,
   ReloadOutlined,
 } from '@ant-design/icons';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { AxiosInstance } from 'axios';
 import type { ColumnsType } from 'antd/es/table';
@@ -87,6 +87,8 @@ export default function ItemCrud({ apiClient, config }: ItemCrudProps) {
     pageSize: 10,
     total: 0,
   });
+  const paginationRef = useRef(pagination);
+  paginationRef.current = pagination;
 
   const [api, contextHolder] = notification.useNotification();
 
@@ -103,58 +105,61 @@ export default function ItemCrud({ apiClient, config }: ItemCrudProps) {
     }
   }, [config.endpoints]);
 
+  const fetchItems = useCallback(
+    async (retry = false) => {
+      if (!selectedEndpoint) return;
+
+      try {
+        setLoading(true);
+        setError(null);
+        const response = await apiClient.get(selectedEndpoint.url, {
+          params: {
+            page: paginationRef.current.current,
+            limit: paginationRef.current.pageSize,
+          },
+        });
+
+        // Handle both array and paginated response formats
+        const itemsData = response.data.data || response.data;
+        const total =
+          response.data.count || response.data.total || itemsData.length;
+
+        setItems(itemsData);
+        setPagination((prev) => ({
+          ...prev,
+          total: total,
+          current: paginationRef.current.current,
+          pageSize: paginationRef.current.pageSize,
+        }));
+        setRetryCount(0);
+      } catch (err) {
+        const errorMessage =
+          err instanceof Error ? err.message : 'Unknown error occurred';
+        setError(errorMessage);
+
+        if (retry && retryCount < MAX_RETRIES) {
+          setRetryCount((prev) => prev + 1);
+          setTimeout(() => fetchItems(true), 1000 * retryCount);
+        } else {
+          api.error({
+            message: 'Error',
+            description: `Failed to fetch items: ${errorMessage}`,
+            duration: 5,
+            placement: 'topRight',
+          });
+        }
+      } finally {
+        setLoading(false);
+      }
+    },
+    [selectedEndpoint, retryCount, api, apiClient]
+  );
+
   useEffect(() => {
     if (selectedEndpoint) {
       fetchItems();
     }
-  }, [selectedEndpoint, pagination.current, pagination.pageSize]);
-
-  const fetchItems = async (retry = false) => {
-    if (!selectedEndpoint) return;
-
-    try {
-      setLoading(true);
-      setError(null);
-      const response = await apiClient.get(selectedEndpoint.url, {
-        params: {
-          page: pagination.current,
-          limit: pagination.pageSize,
-        },
-      });
-
-      // Handle both array and paginated response formats
-      const itemsData = response.data.data || response.data;
-      const total =
-        response.data.count || response.data.total || itemsData.length;
-
-      setItems(itemsData);
-      setPagination((prev) => ({
-        ...prev,
-        total: total,
-        current: pagination.current,
-        pageSize: pagination.pageSize,
-      }));
-      setRetryCount(0);
-    } catch (err) {
-      const errorMessage =
-        err instanceof Error ? err.message : 'Unknown error occurred';
-      setError(errorMessage);
-
-      if (retry && retryCount < MAX_RETRIES) {
-        setRetryCount((prev) => prev + 1);
-        setTimeout(() => fetchItems(true), 1000 * retryCount);
-      } else {
-        api.error({
-          message: 'Error',
-          description: `Failed to fetch items: ${errorMessage}`,
-          duration: 5,
-          placement: 'topRight',
-        });
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [selectedEndpoint, fetchItems]);
 
   const handleSubmit = async (values: Record<string, unknown>) => {
     if (!selectedEndpoint) return;
