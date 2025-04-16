@@ -10,8 +10,8 @@ import {
   Result,
   Space,
   Spin,
+  Switch,
   Table,
-  Tag,
   notification,
 } from 'antd';
 import {
@@ -25,6 +25,7 @@ import { AxiosInstance } from 'axios';
 import type { ColumnsType } from 'antd/es/table';
 import { ErrorBoundary } from 'react-error-boundary';
 import type { Rule } from 'antd/es/form';
+import validator from 'validator';
 
 const { Sider, Content } = Layout;
 
@@ -291,26 +292,33 @@ export default function ItemCrud({ apiClient, config }: ItemCrudProps) {
 
     if (field.validator) {
       if (typeof field.validator === 'string') {
-        switch (field.validator) {
-          case 'email':
-            rules.push({
-              type: 'email',
-              message: 'Please enter a valid email',
-            });
-            break;
-          case 'url':
-            rules.push({ type: 'url', message: 'Please enter a valid URL' });
-            break;
-          case 'number':
-            rules.push({
-              type: 'number',
-              message: 'Please enter a valid number',
-            });
-            break;
-          default:
-            break;
+        // Check if it's a validator function from the validator package
+        const validatorFn =
+          validator[field.validator as keyof typeof validator];
+        if (typeof validatorFn === 'function') {
+          rules.push({
+            validator: async (_: unknown, value: unknown) => {
+              if (typeof value !== 'string') {
+                throw new Error('Value must be a string');
+              }
+              // Type assertion to handle different validator function signatures
+              const isValid = (validatorFn as (str: string) => boolean)(value);
+              if (!isValid) {
+                // Get the error message from the validator function if available
+                const errorMessage =
+                  validator[
+                    `${field.validator}Message` as keyof typeof validator
+                  ];
+                if (typeof errorMessage === 'string') {
+                  throw new Error(errorMessage);
+                }
+                throw new Error(`Invalid ${field.label}`);
+              }
+            },
+          });
         }
       } else {
+        // Handle custom validator function from config
         const validatorFn = field.validator;
         rules.push({
           validator: async (_: unknown, value: unknown) => {
@@ -333,7 +341,11 @@ export default function ItemCrud({ apiClient, config }: ItemCrudProps) {
             label={field.label}
             valuePropName='checked'
             rules={rules}>
-            <Input type='checkbox' disabled={isDisabled} />
+            <Switch
+              checkedChildren='Yes'
+              unCheckedChildren='No'
+              disabled={isDisabled}
+            />
           </Form.Item>
         );
       case 'url':
@@ -398,9 +410,12 @@ export default function ItemCrud({ apiClient, config }: ItemCrudProps) {
             render: (value: unknown) => {
               if (field.type === 'boolean') {
                 return (
-                  <Tag color={value ? 'success' : 'error'}>
-                    {value ? 'Active' : 'Inactive'}
-                  </Tag>
+                  <Switch
+                    checked={Boolean(value)}
+                    checkedChildren='Yes'
+                    unCheckedChildren='No'
+                    disabled
+                  />
                 );
               }
               if (field.type === 'url' && value) {
