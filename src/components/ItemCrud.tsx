@@ -28,6 +28,11 @@ import {
   PictureOutlined,
   ReloadOutlined,
 } from '@ant-design/icons';
+import type {
+  FilterValue,
+  SortOrder,
+  SorterResult,
+} from 'antd/es/table/interface';
 import type { FormInstance, Rule } from 'antd/es/form';
 import type { UploadChangeParam, UploadFile } from 'antd/es/upload/interface';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -38,6 +43,7 @@ import type { ColumnsType } from 'antd/es/table';
 import { ErrorBoundary } from 'react-error-boundary';
 import type { RcFile } from 'antd/es/upload';
 import type { ReactNode } from 'react';
+import type { TablePaginationConfig } from 'antd/es/table';
 
 const { Sider, Content } = Layout;
 
@@ -222,11 +228,28 @@ export default function ItemCrud({
     try {
       setLoading(true);
       setError(null);
+
+      // Get all parameters from URL
+      const searchParams = new URLSearchParams(location.search);
+      const page = searchParams.get('page');
+      const pageSize = searchParams.get('pageSize');
+      const sort = searchParams.get('sort');
+      const order = searchParams.get('order');
+
+      // Build params object
+      const params: Record<string, string | number> = {
+        page: page ? parseInt(page, 10) : pagination.current,
+        limit: pageSize ? parseInt(pageSize, 10) : pagination.pageSize,
+      };
+
+      // Include sorting parameters if they exist in the URL
+      if (sort) {
+        params.sort = sort;
+        params.order = order || 'asc';
+      }
+
       const response = await apiClient.get(selectedEndpoint.url, {
-        params: {
-          page: pagination.current,
-          limit: pagination.pageSize,
-        },
+        params,
       });
 
       // Handle both array and paginated response formats
@@ -274,6 +297,7 @@ export default function ItemCrud({
     apiClient,
     pagination.current,
     pagination.pageSize,
+    location.search,
   ]);
 
   const handleRowClick = (record: Item, event: React.MouseEvent) => {
@@ -374,7 +398,7 @@ export default function ItemCrud({
     }
   };
 
-  // Main effect to handle URL parameters and data fetching
+  // Update the main effect to handle URL parameters and data fetching
   useEffect(() => {
     let isSubscribed = true;
 
@@ -440,11 +464,12 @@ export default function ItemCrud({
     }
   }, [modalState, form, operation, id]);
 
-  // Effect to handle URL parameters
+  // Fix the URL parameter handling in the useEffect
   useEffect(() => {
     const searchParams = new URLSearchParams(location.search);
     const page = searchParams.get('page');
     const pageSize = searchParams.get('pageSize');
+    // Remove unused variables
 
     if (page || pageSize) {
       setPagination((prev) => ({
@@ -454,25 +479,6 @@ export default function ItemCrud({
       }));
     }
   }, [location.search]);
-
-  // Effect to update URL when pagination changes
-  useEffect(() => {
-    if (selectedEndpoint && !operation && !id) {
-      const searchParams = new URLSearchParams();
-      searchParams.set('page', pagination.current.toString());
-      searchParams.set('pageSize', pagination.pageSize.toString());
-      navigate(`/${selectedEndpoint.key}?${searchParams.toString()}`, {
-        replace: true,
-      });
-    }
-  }, [
-    pagination.current,
-    pagination.pageSize,
-    selectedEndpoint,
-    navigate,
-    operation,
-    id,
-  ]);
 
   const fetchItemById = async (itemId: string) => {
     if (!selectedEndpoint || !operation) {
@@ -880,75 +886,91 @@ export default function ItemCrud({
     ? [
         ...selectedEndpoint.fields
           .filter((field) => field.shouldShowInListView)
-          .map((field) => ({
-            title: field.label,
-            dataIndex: field.key,
-            key: field.key,
-            render: (value: unknown) => {
-              if (field.renderInList) {
-                return field.renderInList(
-                  renderValue(value) as string | number | boolean | null
-                );
-              }
+          .map((field) => {
+            // Get current sort from URL
+            const searchParams = new URLSearchParams(location.search);
+            const currentSort = searchParams.get('sort');
+            const currentOrder = searchParams.get('order');
 
-              if (field.type === 'relation' && field.relation && value) {
-                const idValue =
-                  typeof value === 'object' && 'uid' in value
-                    ? value.uid
-                    : renderValue(value);
-                return (
-                  <Button
-                    type='link'
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      // Use window.location.href to navigate without triggering React Router effects
-                      window.location.href = `/${
-                        field.relation!.entity
-                      }/view/${idValue}`;
-                    }}>
-                    View {field.label}
-                  </Button>
-                );
-              }
+            return {
+              title: field.label,
+              dataIndex: field.key,
+              key: field.key,
+              sorter: true,
+              sortOrder:
+                currentSort === field.key
+                  ? ((currentOrder === 'asc'
+                      ? 'ascend'
+                      : 'descend') as SortOrder)
+                  : undefined,
+              render: (value: unknown) => {
+                if (field.renderInList) {
+                  return field.renderInList(
+                    renderValue(value) as string | number | boolean | null
+                  );
+                }
 
-              if (field.isImage && value) {
-                return (
-                  <div onClick={(e) => e.stopPropagation()}>
+                if (field.type === 'relation' && field.relation && value) {
+                  const idValue =
+                    typeof value === 'object' && 'uid' in value
+                      ? value.uid
+                      : renderValue(value);
+                  return (
+                    <Button
+                      type='link'
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        // Use window.location.href to navigate without triggering React Router effects
+                        window.location.href = `/${
+                          field.relation!.entity
+                        }/view/${idValue}`;
+                      }}>
+                      View {field.label}
+                    </Button>
+                  );
+                }
+
+                if (field.isImage && value) {
+                  return (
+                    <div onClick={(e) => e.stopPropagation()}>
+                      <Image width={40} src={renderValue(value) as string} />
+                    </div>
+                  );
+                }
+
+                if (field.isFile && value) {
+                  return (
+                    <Button
+                      icon={<FileOutlined />}
+                      size='small'
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        window.open(renderValue(value) as string, '_blank');
+                      }}>
+                      View File
+                    </Button>
+                  );
+                }
+
+                if (field.type === 'boolean') {
+                  return (
+                    <Switch
+                      checked={Boolean(renderValue(value))}
+                      checkedChildren='Yes'
+                      unCheckedChildren='No'
+                      disabled
+                    />
+                  );
+                }
+                if (field.type === 'url' && value) {
+                  return (
                     <Image width={40} src={renderValue(value) as string} />
-                  </div>
-                );
-              }
-
-              if (field.isFile && value) {
-                return (
-                  <Button
-                    icon={<FileOutlined />}
-                    size='small'
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      window.open(renderValue(value) as string, '_blank');
-                    }}>
-                    View File
-                  </Button>
-                );
-              }
-
-              if (field.type === 'boolean') {
-                return (
-                  <Switch
-                    checked={Boolean(renderValue(value))}
-                    checkedChildren='Yes'
-                    unCheckedChildren='No'
-                    disabled
-                  />
-                );
-              }
-              if (field.type === 'url' && value) {
-                return <Image width={40} src={renderValue(value) as string} />;
-              }
-              return renderValue(value) as React.ReactNode;
-            },
-          })),
+                  );
+                }
+                return renderValue(value) as React.ReactNode;
+              },
+            };
+          }),
         {
           title: 'Actions',
           key: 'actions',
@@ -1224,23 +1246,58 @@ export default function ItemCrud({
     setIsModalVisible(true);
   };
 
-  const handleTableChange = (newPagination: {
-    current?: number;
-    pageSize?: number;
-    total?: number;
-  }) => {
+  const handleTableChange = (
+    newPagination: TablePaginationConfig,
+    filters: Record<string, FilterValue | null>,
+    sorter: SorterResult<Item> | SorterResult<Item>[]
+  ) => {
+    // Get current URL parameters
+    const searchParams = new URLSearchParams(location.search);
+
+    // Handle pagination changes
     if (
       newPagination.current !== pagination.current ||
       newPagination.pageSize !== pagination.pageSize
     ) {
-      setPagination((prev) => ({
-        ...prev,
-        current: newPagination.current || prev.current,
-        pageSize: newPagination.pageSize || prev.pageSize,
-      }));
-
-      fetchItems();
+      searchParams.set('page', newPagination.current?.toString() || '1');
+      searchParams.set('pageSize', newPagination.pageSize?.toString() || '10');
     }
+
+    // Handle sorting changes - only update if it's a single column sort
+    if (!Array.isArray(sorter) && sorter.field) {
+      const currentSort = searchParams.get('sort');
+      const currentOrder = searchParams.get('order');
+
+      // Determine the new sort order
+      let newOrder: string;
+
+      if (sorter.field === currentSort) {
+        // If clicking the same field, toggle between ascend and descend
+        newOrder = currentOrder === 'asc' ? 'desc' : 'asc';
+      } else {
+        // If clicking a new field, default to ascending
+        newOrder = 'asc';
+      }
+
+      // Update URL parameters
+      searchParams.set('sort', sorter.field as string);
+      searchParams.set('order', newOrder);
+    } else if (Array.isArray(sorter) && sorter.length === 0) {
+      // If no sorting is selected, default to the first sortable field in ascending order
+      const firstSortableField = selectedEndpoint?.fields.find(
+        (f) => f.shouldShowInListView
+      )?.key;
+
+      if (firstSortableField) {
+        searchParams.set('sort', firstSortableField);
+        searchParams.set('order', 'asc');
+      }
+    }
+
+    // Update URL without triggering navigation
+    navigate(`${location.pathname}?${searchParams.toString()}`, {
+      replace: true,
+    });
   };
 
   return (
