@@ -53,19 +53,10 @@ function App() {
           },
           {
             key: 'email',
-            label: 'Email',
+            label: 'Emailaaa',
             placeHolder: 'Enter email',
-            type: 'email',
-            validator: (value: unknown) => {
-              const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-              if (typeof value === 'string' && emailRegex.test(value)) {
-                return { status: true };
-              }
-              return {
-                status: false,
-                message: 'Please enter a valid email address',
-              };
-            },
+            type: 'string',
+            validator: 'isEmail',
             isNullable: false,
             isPostable: true,
             isPutable: true,
