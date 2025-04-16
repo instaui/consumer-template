@@ -1263,17 +1263,20 @@ export default function ItemCrud({
       searchParams.set('pageSize', newPagination.pageSize?.toString() || '10');
     }
 
-    // Handle sorting changes - only update if it's a single column sort
-    if (!Array.isArray(sorter) && sorter.field) {
-      const currentSort = searchParams.get('sort');
-      const currentOrder = searchParams.get('order');
+    // Handle sorting changes
+    const currentSort = searchParams.get('sort');
+    const currentOrder = searchParams.get('order');
 
+    // Check if we have a valid sorter object
+    if (!Array.isArray(sorter) && sorter.field) {
       // Determine the new sort order
       let newOrder: string;
 
       if (sorter.field === currentSort) {
         // If clicking the same field, toggle between ascend and descend
-        newOrder = currentOrder === 'asc' ? 'desc' : 'asc';
+        // When current order is 'desc', next click should be 'asc'
+        // When current order is 'asc', next click should be 'desc'
+        newOrder = currentOrder === 'desc' ? 'asc' : 'desc';
       } else {
         // If clicking a new field, default to ascending
         newOrder = 'asc';
@@ -1282,7 +1285,16 @@ export default function ItemCrud({
       // Update URL parameters
       searchParams.set('sort', sorter.field as string);
       searchParams.set('order', newOrder);
-    } else if (Array.isArray(sorter) && sorter.length === 0) {
+    }
+    // Handle the case when sorter becomes undefined (third click)
+    else if (!Array.isArray(sorter) && !sorter.field && currentSort) {
+      // Toggle the current sort order
+      const newOrder = currentOrder === 'desc' ? 'asc' : 'desc';
+      searchParams.set('sort', currentSort);
+      searchParams.set('order', newOrder);
+    }
+    // Handle the case when no sorting is selected
+    else if (Array.isArray(sorter) && sorter.length === 0) {
       // If no sorting is selected, default to the first sortable field in ascending order
       const firstSortableField = selectedEndpoint?.fields.find(
         (f) => f.shouldShowInListView
