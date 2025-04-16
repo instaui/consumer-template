@@ -23,6 +23,8 @@ import {
   DeleteOutlined,
   EditOutlined,
   FileOutlined,
+  MenuFoldOutlined,
+  MenuUnfoldOutlined,
   PictureOutlined,
   ReloadOutlined,
 } from '@ant-design/icons';
@@ -138,6 +140,8 @@ export default function ItemCrud({
     type: 'view' | 'edit' | null;
     item: Item | null;
   }>({ type: null, item: null });
+
+  const [collapsed, setCollapsed] = useState(false);
 
   const fetchItems = useCallback(async () => {
     if (!selectedEndpoint) {
@@ -1124,6 +1128,14 @@ export default function ItemCrud({
       <Sider
         width={250}
         theme='light'
+        collapsible
+        collapsed={collapsed}
+        onCollapse={(value) => setCollapsed(value)}
+        trigger={
+          <div style={{ textAlign: 'center', padding: '8px' }}>
+            {collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+          </div>
+        }
         style={{
           background: '#fff',
           borderRight: '1px solid #f0f0f0',
