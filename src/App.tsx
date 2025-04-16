@@ -16,9 +16,10 @@ function App() {
         key: 'users',
         label: 'Users',
         url: '/users',
+        idField: 'uid',
         fields: [
           {
-            key: 'id',
+            key: 'uid',
             label: 'ID',
             type: 'text',
             isNullable: false,
@@ -123,9 +124,10 @@ function App() {
         key: 'agents',
         label: 'Agents',
         url: '/agents',
+        idField: 'uid',
         fields: [
           {
-            key: 'id',
+            key: 'uid',
             label: 'ID',
             type: 'text',
             isNullable: false,
@@ -253,9 +255,10 @@ function App() {
         key: 'items',
         label: 'Items',
         url: '/items',
+        idField: 'uid',
         fields: [
           {
-            key: 'id',
+            key: 'uid',
             label: 'ID',
             type: 'text',
             isNullable: false,

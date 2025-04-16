@@ -52,6 +52,7 @@ export interface EndpointConfig {
   key: string;
   label: string;
   url: string;
+  idField?: string;
   fields: FieldConfig[];
   validator?: (formData: Record<string, unknown>) => {
     status: boolean;
@@ -159,7 +160,7 @@ export default function ItemCrud({ apiClient, config }: ItemCrudProps) {
     if (selectedEndpoint) {
       fetchItems();
     }
-  }, [selectedEndpoint, fetchItems]);
+  }, [selectedEndpoint, fetchItems, pagination.current, pagination.pageSize]);
 
   const handleSubmit = async (values: Record<string, unknown>) => {
     if (!selectedEndpoint) return;
@@ -169,8 +170,9 @@ export default function ItemCrud({ apiClient, config }: ItemCrudProps) {
       setError(null);
 
       if (editingItem) {
+        const idField = selectedEndpoint.idField || 'id';
         await apiClient.patch(
-          `${selectedEndpoint.url}/${editingItem.id}`,
+          `${selectedEndpoint.url}/${editingItem[idField]}`,
           values
         );
         api.success({
@@ -213,9 +215,12 @@ export default function ItemCrud({ apiClient, config }: ItemCrudProps) {
 
     try {
       setLoading(true);
-      const response = await apiClient.get(
-        `${selectedEndpoint.url}/${item.id}`
-      );
+      const idField = selectedEndpoint.idField || 'id';
+      const itemId = item[idField];
+      if (!itemId) {
+        throw new Error(`Item ${idField} is missing`);
+      }
+      const response = await apiClient.get(`${selectedEndpoint.url}/${itemId}`);
       const itemData = response.data.data || response.data;
       setEditingItem(itemData);
 
@@ -432,22 +437,25 @@ export default function ItemCrud({ apiClient, config }: ItemCrudProps) {
         {
           title: 'Actions',
           key: 'actions',
-          render: (_: unknown, record: Item) => (
-            <Space>
-              <Button
-                type='primary'
-                icon={<EditOutlined />}
-                onClick={() => handleEdit(record)}>
-                Edit
-              </Button>
-              <Button
-                danger
-                icon={<DeleteOutlined />}
-                onClick={() => handleDelete(record.id)}>
-                Delete
-              </Button>
-            </Space>
-          ),
+          render: (_: unknown, record: Item) => {
+            const idField = selectedEndpoint.idField || 'id';
+            return (
+              <Space>
+                <Button
+                  type='primary'
+                  icon={<EditOutlined />}
+                  onClick={() => handleEdit(record)}>
+                  Edit
+                </Button>
+                <Button
+                  danger
+                  icon={<DeleteOutlined />}
+                  onClick={() => handleDelete(record[idField] as string)}>
+                  Delete
+                </Button>
+              </Space>
+            );
+          },
         },
       ]
     : [];
@@ -542,6 +550,17 @@ export default function ItemCrud({ apiClient, config }: ItemCrudProps) {
     setEditingItem(null);
     form.resetFields();
     setIsModalVisible(true);
+  };
+
+  const handleTableChange = (newPagination: {
+    current?: number;
+    pageSize?: number;
+    total?: number;
+  }) => {
+    setPagination((prev) => ({
+      ...prev,
+      ...newPagination,
+    }));
   };
 
   return (
@@ -651,7 +670,10 @@ export default function ItemCrud({ apiClient, config }: ItemCrudProps) {
                     <Table
                       dataSource={items}
                       columns={columns}
-                      rowKey='id'
+                      rowKey={(record) =>
+                        String(record[selectedEndpoint?.idField || 'id'])
+                      }
+                      onChange={handleTableChange}
                       onRow={(record) => ({
                         onClick: (event) => handleRowClick(record, event),
                         style: { cursor: 'pointer' },
@@ -660,23 +682,8 @@ export default function ItemCrud({ apiClient, config }: ItemCrudProps) {
                         current: pagination.current,
                         pageSize: pagination.pageSize,
                         total: pagination.total,
-                        position: ['bottomCenter'],
                         showSizeChanger: true,
                         showQuickJumper: true,
-                        onChange: (page, pageSize) => {
-                          setPagination((prev) => ({
-                            ...prev,
-                            current: page,
-                            pageSize: pageSize || prev.pageSize,
-                          }));
-                        },
-                        onShowSizeChange: (current, size) => {
-                          setPagination((prev) => ({
-                            ...prev,
-                            current: 1,
-                            pageSize: size,
-                          }));
-                        },
                       }}
                       style={{ height: '100%' }}
                       scroll={{ y: 'calc(100vh - 200px)' }}
