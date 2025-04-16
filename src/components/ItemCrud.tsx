@@ -386,6 +386,7 @@ export default function ItemCrud({
     try {
       setLoading(true);
       setError(null);
+      console.log('Submitting form with values:', values);
 
       if (editingItem) {
         const idField = selectedEndpoint.idField || 'id';
@@ -393,7 +394,12 @@ export default function ItemCrud({
         if (!itemId) {
           throw new Error('Item ID is missing');
         }
-        await apiClient.patch(`${selectedEndpoint.url}/${itemId}`, values);
+        console.log('Updating item with ID:', itemId);
+        const response = await apiClient.patch(
+          `${selectedEndpoint.url}/${itemId}`,
+          values
+        );
+        console.log('Update response:', response.data);
         api.success({
           message: 'Success',
           description: 'Item updated successfully',
@@ -401,7 +407,9 @@ export default function ItemCrud({
           placement: 'topRight',
         });
       } else {
-        await apiClient.post(selectedEndpoint.url, values);
+        console.log('Creating new item');
+        const response = await apiClient.post(selectedEndpoint.url, values);
+        console.log('Create response:', response.data);
         api.success({
           message: 'Success',
           description: 'Item created successfully',
@@ -415,6 +423,7 @@ export default function ItemCrud({
     } catch (err) {
       const errorMessage =
         err instanceof Error ? err.message : 'Unknown error occurred';
+      console.error('Error submitting form:', err);
       setError(errorMessage);
       api.error({
         message: 'Error',
@@ -795,7 +804,10 @@ export default function ItemCrud({
       footer={
         <div style={{ textAlign: 'right' }}>
           <Space>
-            <Button type='primary' htmlType='submit'>
+            <Button
+              type='primary'
+              onClick={() => form.submit()}
+              loading={loading}>
               {editingItem ? 'Update' : 'Add'} Item
             </Button>
             <Button onClick={handleModalClose}>Cancel</Button>
@@ -803,7 +815,11 @@ export default function ItemCrud({
         </div>
       }>
       <Spin spinning={loading}>
-        <Form form={form} layout='vertical' onFinish={handleSubmit}>
+        <Form
+          form={form}
+          layout='vertical'
+          onFinish={handleSubmit}
+          initialValues={editingItem || {}}>
           {selectedEndpoint?.fields
             .filter((field) =>
               editingItem
@@ -824,7 +840,11 @@ export default function ItemCrud({
       footer={null}
       width={600}>
       <Spin spinning={loading}>
-        <Form form={form} layout='vertical' onFinish={handleSubmit}>
+        <Form
+          form={form}
+          layout='vertical'
+          onFinish={handleSubmit}
+          initialValues={editingItem || {}}>
           {selectedEndpoint?.fields
             .filter((field) =>
               editingItem
@@ -836,7 +856,7 @@ export default function ItemCrud({
             ))}
           <Form.Item>
             <Space>
-              <Button type='primary' htmlType='submit'>
+              <Button type='primary' htmlType='submit' loading={loading}>
                 {editingItem ? 'Update' : 'Add'} Item
               </Button>
               <Button onClick={handleModalClose}>Cancel</Button>
