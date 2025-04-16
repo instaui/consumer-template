@@ -340,7 +340,7 @@ function App() {
           label: 'User',
           type: 'relation',
           isRequired: false,
-          shouldShowInListView: false,
+          shouldShowInListView: true,
           isPatchable: true,
           isPutable: true,
           isPostable: true,
