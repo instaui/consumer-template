@@ -221,13 +221,17 @@ function App() {
         {
           key: 'user',
           label: 'User',
-          type: 'text',
+          type: 'relation',
           isRequired: false,
           shouldShowInListView: false,
           isPatchable: true,
           isPutable: true,
           isPostable: true,
-          isReadOnly: true,
+          relation: {
+            entity: 'users',
+            idField: 'uid',
+            keyColumns: ['fname', 'lname', 'email'],
+          },
         },
       ],
       validator: (values) => {
@@ -334,13 +338,17 @@ function App() {
         {
           key: 'user',
           label: 'User',
-          type: 'text',
+          type: 'relation',
           isRequired: false,
           shouldShowInListView: false,
           isPatchable: true,
           isPutable: true,
           isPostable: true,
-          isReadOnly: true,
+          relation: {
+            entity: 'users',
+            idField: 'uid',
+            keyColumns: ['fname', 'lname', 'email'],
+          },
         },
       ],
       validator: (values) => {

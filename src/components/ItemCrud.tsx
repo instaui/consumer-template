@@ -28,6 +28,7 @@ import {
   PictureOutlined,
   ReloadOutlined,
 } from '@ant-design/icons';
+import type { FormInstance, Rule } from 'antd/es/form';
 import type { UploadChangeParam, UploadFile } from 'antd/es/upload/interface';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
@@ -37,7 +38,6 @@ import type { ColumnsType } from 'antd/es/table';
 import { ErrorBoundary } from 'react-error-boundary';
 import type { RcFile } from 'antd/es/upload';
 import type { ReactNode } from 'react';
-import type { Rule } from 'antd/es/form';
 
 const { Sider, Content } = Layout;
 
@@ -57,7 +57,8 @@ export interface FieldConfig {
     | 'select'
     | 'date'
     | 'boolean'
-    | 'url';
+    | 'url'
+    | 'relation';
   options?: { label: string; value: string }[];
   isId?: boolean;
   isRequired?: boolean;
@@ -76,6 +77,11 @@ export interface FieldConfig {
   validator?: (value: unknown) => ValidationResult;
   renderInList?: (value: string | number | boolean | null) => ReactNode;
   renderInDetail?: (value: string | number | boolean | null) => ReactNode;
+  relation?: {
+    entity: string;
+    idField: string;
+    keyColumns: string[];
+  };
 }
 
 export interface EndpointConfig {
@@ -98,6 +104,71 @@ interface ItemCrudProps {
   };
   useDrawer?: boolean;
 }
+
+interface RelationFieldProps {
+  field: FieldConfig;
+  apiClient: AxiosInstance;
+  rules: Rule[];
+  isDisabled: boolean;
+  form: FormInstance;
+}
+
+const RelationField: React.FC<RelationFieldProps> = ({
+  field,
+  apiClient,
+  rules,
+  isDisabled,
+  form,
+}) => {
+  const [options, setOptions] = useState<{ label: string; value: string }[]>(
+    []
+  );
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const loadRelationOptions = async () => {
+      try {
+        setLoading(true);
+        const response = await apiClient.get(`/${field.relation!.entity}`);
+        const items = response.data.data || response.data;
+        const newOptions = items.map((item: Item) => ({
+          label: field
+            .relation!.keyColumns.map((col) => item[col])
+            .filter(Boolean)
+            .join(' - '),
+          value: item[field.relation!.idField],
+        }));
+        setOptions(newOptions);
+      } catch (error) {
+        console.error('Failed to load relation options:', error);
+        message.error('Failed to load relation options');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadRelationOptions();
+  }, [field.relation, apiClient]);
+
+  return (
+    <Form.Item name={field.key} label={field.label} rules={rules}>
+      <Select
+        showSearch
+        placeholder={field.placeHolder || `Select ${field.label}`}
+        disabled={isDisabled || loading}
+        loading={loading}
+        options={options}
+        filterOption={(input, option) =>
+          (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+        }
+        onChange={(value) => {
+          // Ensure we're setting just the uid value
+          form.setFieldValue(field.key, value);
+        }}
+      />
+    </Form.Item>
+  );
+};
 
 export default function ItemCrud({
   apiClient,
@@ -457,6 +528,16 @@ export default function ItemCrud({
           (field.isFile || field.isImage) && values[field.key] instanceof File
       );
 
+      // Format relation fields
+      const formattedValues = { ...values };
+      selectedEndpoint.fields.forEach((field) => {
+        if (field.type === 'relation' && field.relation && values[field.key]) {
+          formattedValues[field.key] = {
+            [field.relation.idField]: values[field.key],
+          };
+        }
+      });
+
       let requestData;
       let headers = {};
 
@@ -465,7 +546,7 @@ export default function ItemCrud({
         const formData = new FormData();
 
         // Add all form values to FormData
-        Object.entries(values).forEach(([key, value]) => {
+        Object.entries(formattedValues).forEach(([key, value]) => {
           if (value instanceof File) {
             // Handle File objects
             formData.append(key, value);
@@ -489,7 +570,7 @@ export default function ItemCrud({
         // Let the browser set the correct Content-Type with boundary for FormData
       } else {
         // For non-file submissions, use JSON
-        requestData = values;
+        requestData = formattedValues;
         headers = {
           'Content-Type': 'application/json',
         };
@@ -587,6 +668,13 @@ export default function ItemCrud({
     if (value === null || value === undefined) {
       return null;
     }
+    if (typeof value === 'object') {
+      // Handle relation objects that have an idField
+      if ('uid' in value) {
+        return (value as { uid: string }).uid;
+      }
+      return String(value);
+    }
     if (
       typeof value === 'string' ||
       typeof value === 'number' ||
@@ -616,6 +704,19 @@ export default function ItemCrud({
 
     // Only disable fields that are explicitly marked as read-only
     const isDisabled = field.isReadOnly === true;
+
+    // Handle relations
+    if (field.type === 'relation' && field.relation) {
+      return (
+        <RelationField
+          field={field}
+          apiClient={apiClient}
+          rules={rules}
+          isDisabled={isDisabled}
+          form={form}
+        />
+      );
+    }
 
     // Handle file and image uploads
     if (field.isFile || field.isImage) {
@@ -783,6 +884,23 @@ export default function ItemCrud({
                 );
               }
 
+              if (field.type === 'relation' && field.relation && value) {
+                const idValue =
+                  typeof value === 'object' && 'uid' in value
+                    ? value.uid
+                    : renderValue(value);
+                return (
+                  <Button
+                    type='link'
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      navigate(`/${field.relation!.entity}/view/${idValue}`);
+                    }}>
+                    View {field.label}
+                  </Button>
+                );
+              }
+
               if (field.isImage && value) {
                 return (
                   <div onClick={(e) => e.stopPropagation()}>
@@ -898,6 +1016,56 @@ export default function ItemCrud({
     </Modal>
   );
 
+  const renderDetailValue = (field: FieldConfig, value: unknown) => {
+    if (field.renderInDetail) {
+      return field.renderInDetail(renderValue(value));
+    }
+
+    if (field.type === 'relation' && field.relation && value) {
+      const idValue =
+        typeof value === 'object' && 'uid' in value
+          ? value.uid
+          : renderValue(value);
+      return (
+        <Button
+          type='link'
+          onClick={() =>
+            navigate(`/${field.relation!.entity}/view/${idValue}`)
+          }>
+          View {field.label}
+        </Button>
+      );
+    }
+
+    if (field.isImage && value) {
+      return <Image width={200} src={String(value)} />;
+    }
+
+    if (field.isFile && value) {
+      return (
+        <Button
+          icon={<FileOutlined />}
+          onClick={() => window.open(String(value), '_blank')}>
+          Download File
+        </Button>
+      );
+    }
+
+    if (field.type === 'boolean') {
+      return value ? 'Yes' : 'No';
+    }
+
+    if (field.type === 'url' && value) {
+      return <Image width={100} src={String(value)} />;
+    }
+
+    if (value !== null && value !== undefined) {
+      return String(value);
+    }
+
+    return null;
+  };
+
   const DetailModal = useDrawer ? (
     <Drawer
       title='Item Details'
@@ -921,36 +1089,12 @@ export default function ItemCrud({
         <div>
           {selectedEndpoint.fields.map((field) => {
             const value = selectedItem[field.key];
-            let displayValue: React.ReactNode = '';
-
-            if (field.renderInDetail) {
-              displayValue = field.renderInDetail(renderValue(value));
-            } else {
-              if (field.isImage && value) {
-                displayValue = <Image width={200} src={String(value)} />;
-              } else if (field.isFile && value) {
-                displayValue = (
-                  <Button
-                    icon={<FileOutlined />}
-                    onClick={() => window.open(String(value), '_blank')}>
-                    Download File
-                  </Button>
-                );
-              } else if (field.type === 'boolean') {
-                displayValue = value ? 'Yes' : 'No';
-              } else if (field.type === 'url' && value) {
-                displayValue = <Image width={100} src={String(value)} />;
-              } else if (value !== null && value !== undefined) {
-                displayValue = String(value);
-              }
-            }
-
             return (
               <div key={field.key} style={{ marginBottom: '16px' }}>
                 <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>
                   {field.label}:
                 </div>
-                <div>{displayValue}</div>
+                <div>{renderDetailValue(field, value)}</div>
               </div>
             );
           })}
@@ -968,36 +1112,12 @@ export default function ItemCrud({
         <div>
           {selectedEndpoint.fields.map((field) => {
             const value = selectedItem[field.key];
-            let displayValue: React.ReactNode = '';
-
-            if (field.renderInDetail) {
-              displayValue = field.renderInDetail(renderValue(value));
-            } else {
-              if (field.isImage && value) {
-                displayValue = <Image width={200} src={String(value)} />;
-              } else if (field.isFile && value) {
-                displayValue = (
-                  <Button
-                    icon={<FileOutlined />}
-                    onClick={() => window.open(String(value), '_blank')}>
-                    Download File
-                  </Button>
-                );
-              } else if (field.type === 'boolean') {
-                displayValue = value ? 'Yes' : 'No';
-              } else if (field.type === 'url' && value) {
-                displayValue = <Image width={100} src={String(value)} />;
-              } else if (value !== null && value !== undefined) {
-                displayValue = String(value);
-              }
-            }
-
             return (
               <div key={field.key} style={{ marginBottom: '16px' }}>
                 <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>
                   {field.label}:
                 </div>
-                <div>{displayValue}</div>
+                <div>{renderDetailValue(field, value)}</div>
               </div>
             );
           })}
