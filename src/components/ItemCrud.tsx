@@ -126,8 +126,8 @@ export default function ItemCrud({ apiClient, config }: ItemCrudProps) {
         setError(null);
         const response = await apiClient.get(selectedEndpoint.url, {
           params: {
-            page: paginationRef.current.current,
-            limit: paginationRef.current.pageSize,
+            page: pagination.current,
+            limit: pagination.pageSize,
           },
         });
 
@@ -141,8 +141,6 @@ export default function ItemCrud({ apiClient, config }: ItemCrudProps) {
         setPagination((prev) => ({
           ...prev,
           total: total,
-          current: paginationRef.current.current,
-          pageSize: paginationRef.current.pageSize,
         }));
         setRetryCount(0);
 
@@ -184,7 +182,16 @@ export default function ItemCrud({ apiClient, config }: ItemCrudProps) {
         setLoading(false);
       }
     },
-    [selectedEndpoint, retryCount, api, apiClient, operation, id]
+    [
+      selectedEndpoint,
+      retryCount,
+      api,
+      apiClient,
+      operation,
+      id,
+      pagination.current,
+      pagination.pageSize,
+    ]
   );
 
   const handleRowClick = (record: Item, event: React.MouseEvent) => {
@@ -247,67 +254,22 @@ export default function ItemCrud({ apiClient, config }: ItemCrudProps) {
         const endpoint = config.endpoints.find((e) => e.key === entity);
         if (endpoint && isSubscribed) {
           console.log('Setting endpoint:', endpoint.key);
+
+          // Only reset pagination if the entity has changed
+          const prevEntity = selectedEndpoint?.key;
+          if (prevEntity !== entity) {
+            console.log('Entity changed, resetting pagination');
+            setPagination({
+              current: 1,
+              pageSize: 10,
+              total: 0,
+            });
+          }
+
           setSelectedEndpoint(endpoint);
 
-          try {
-            setLoading(true);
-            const response = await apiClient.get(endpoint.url, {
-              params: {
-                page: pagination.current,
-                limit: pagination.pageSize,
-              },
-            });
-
-            if (!isSubscribed) return;
-
-            const itemsData = response.data.data || response.data;
-            const total =
-              response.data.count || response.data.total || itemsData.length;
-
-            setItems(itemsData);
-            setPagination((prev) => ({
-              ...prev,
-              total,
-            }));
-
-            // Handle operation and ID after data is loaded
-            if (operation && id) {
-              console.log('Checking for item:', { operation, id });
-              const item = itemsData.find(
-                (item: Item) => String(item[endpoint.idField || 'id']) === id
-              );
-
-              if (item && isSubscribed) {
-                console.log('Found item:', item);
-                setModalState({ type: operation, item });
-              } else if (isSubscribed) {
-                console.log('Item not found, fetching individually');
-                const itemResponse = await apiClient.get(
-                  `${endpoint.url}/${id}`
-                );
-                const itemData = itemResponse.data.data || itemResponse.data;
-                if (isSubscribed) {
-                  setModalState({ type: operation, item: itemData });
-                }
-              }
-            }
-          } catch (err) {
-            if (!isSubscribed) return;
-            const errorMessage =
-              err instanceof Error ? err.message : 'Unknown error occurred';
-            console.error('Error loading data:', errorMessage);
-            setError(errorMessage);
-            api.error({
-              message: 'Error',
-              description: `Failed to load data: ${errorMessage}`,
-              duration: 5,
-              placement: 'topRight',
-            });
-          } finally {
-            if (isSubscribed) {
-              setLoading(false);
-            }
-          }
+          // Fetch items for the new endpoint
+          fetchItems();
         }
       } else if (config.endpoints.length > 0) {
         navigate(`/${config.endpoints[0].key}`, { replace: true });
@@ -319,7 +281,7 @@ export default function ItemCrud({ apiClient, config }: ItemCrudProps) {
     return () => {
       isSubscribed = false;
     };
-  }, [entity, operation, id, pagination.current, pagination.pageSize]);
+  }, [entity, operation, id, fetchItems, selectedEndpoint]);
 
   // Effect to handle modal visibility based on modalState
   useEffect(() => {
@@ -345,6 +307,7 @@ export default function ItemCrud({ apiClient, config }: ItemCrudProps) {
     }
   }, [modalState, form, operation, id]);
 
+  // Effect to handle URL parameters
   useEffect(() => {
     const searchParams = new URLSearchParams(location.search);
     const page = searchParams.get('page');
@@ -359,8 +322,9 @@ export default function ItemCrud({ apiClient, config }: ItemCrudProps) {
     }
   }, [location.search]);
 
+  // Effect to update URL when pagination changes
   useEffect(() => {
-    if (selectedEndpoint) {
+    if (selectedEndpoint && !operation && !id) {
       const searchParams = new URLSearchParams();
       searchParams.set('page', pagination.current.toString());
       searchParams.set('pageSize', pagination.pageSize.toString());
@@ -368,7 +332,14 @@ export default function ItemCrud({ apiClient, config }: ItemCrudProps) {
         replace: true,
       });
     }
-  }, [pagination.current, pagination.pageSize, selectedEndpoint, navigate]);
+  }, [
+    pagination.current,
+    pagination.pageSize,
+    selectedEndpoint,
+    navigate,
+    operation,
+    id,
+  ]);
 
   const fetchItemById = async (itemId: string) => {
     console.log('Fetching item by ID:', itemId);
@@ -786,10 +757,22 @@ export default function ItemCrud({ apiClient, config }: ItemCrudProps) {
     pageSize?: number;
     total?: number;
   }) => {
-    setPagination((prev) => ({
-      ...prev,
-      ...newPagination,
-    }));
+    console.log('Table change:', newPagination);
+
+    // Only update if the values have actually changed
+    if (
+      newPagination.current !== pagination.current ||
+      newPagination.pageSize !== pagination.pageSize
+    ) {
+      setPagination((prev) => ({
+        ...prev,
+        current: newPagination.current || prev.current,
+        pageSize: newPagination.pageSize || prev.pageSize,
+      }));
+
+      // Fetch new items with updated pagination
+      fetchItems();
+    }
   };
 
   return (
