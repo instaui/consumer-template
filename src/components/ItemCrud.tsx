@@ -76,7 +76,11 @@ interface ItemCrudProps {
 export default function ItemCrud({ apiClient, config }: ItemCrudProps) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { entity } = useParams<{ entity: string }>();
+  const { entity, operation, id } = useParams<{
+    entity: string;
+    operation?: 'view' | 'edit';
+    id?: string;
+  }>();
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -104,21 +108,242 @@ export default function ItemCrud({ apiClient, config }: ItemCrudProps) {
   const [detailModalVisible, setDetailModalVisible] = useState(false);
   const [selectedItem, setSelectedItem] = useState<Item | null>(null);
 
-  useEffect(() => {
-    if (entity) {
-      const endpoint = config.endpoints.find((e) => e.key === entity);
-      if (endpoint) {
-        setSelectedEndpoint(endpoint);
-        setPagination({
-          current: 1,
-          pageSize: 10,
-          total: 0,
-        });
+  const [modalState, setModalState] = useState<{
+    type: 'view' | 'edit' | null;
+    item: Item | null;
+  }>({ type: null, item: null });
+
+  const fetchItems = useCallback(
+    async (retry = false) => {
+      console.log('Fetching items:', { selectedEndpoint, operation, id });
+      if (!selectedEndpoint) {
+        console.log('No selected endpoint');
+        return;
       }
-    } else if (config.endpoints.length > 0) {
-      navigate(`/${config.endpoints[0].key}`, { replace: true });
+
+      try {
+        setLoading(true);
+        setError(null);
+        const response = await apiClient.get(selectedEndpoint.url, {
+          params: {
+            page: paginationRef.current.current,
+            limit: paginationRef.current.pageSize,
+          },
+        });
+
+        // Handle both array and paginated response formats
+        const itemsData = response.data.data || response.data;
+        const total =
+          response.data.count || response.data.total || itemsData.length;
+
+        console.log('Fetched items:', itemsData);
+        setItems(itemsData);
+        setPagination((prev) => ({
+          ...prev,
+          total: total,
+          current: paginationRef.current.current,
+          pageSize: paginationRef.current.pageSize,
+        }));
+        setRetryCount(0);
+
+        // After fetching items, check if we need to show a modal
+        if (operation && id) {
+          console.log('Checking for modal after fetch:', { operation, id });
+          const item = itemsData.find(
+            (item: Item) =>
+              String(item[selectedEndpoint.idField || 'id']) === id
+          );
+          if (item) {
+            console.log('Found item in fetched data:', item);
+            setModalState({ type: operation, item });
+          } else {
+            console.log(
+              'Item not found in fetched data, fetching individually'
+            );
+            fetchItemById(id);
+          }
+        }
+      } catch (err) {
+        const errorMessage =
+          err instanceof Error ? err.message : 'Unknown error occurred';
+        console.error('Error fetching items:', errorMessage);
+        setError(errorMessage);
+
+        if (retry && retryCount < MAX_RETRIES) {
+          setRetryCount((prev) => prev + 1);
+          setTimeout(() => fetchItems(true), 1000 * retryCount);
+        } else {
+          api.error({
+            message: 'Error',
+            description: `Failed to fetch items: ${errorMessage}`,
+            duration: 5,
+            placement: 'topRight',
+          });
+        }
+      } finally {
+        setLoading(false);
+      }
+    },
+    [selectedEndpoint, retryCount, api, apiClient, operation, id]
+  );
+
+  const handleRowClick = (record: Item, event: React.MouseEvent) => {
+    const target = event.target as HTMLElement;
+    if (target.closest('button')) {
+      return;
     }
-  }, [entity, config.endpoints, navigate]);
+    const idField = selectedEndpoint?.idField || 'id';
+    const itemId = record[idField];
+    if (!itemId) {
+      api.error({
+        message: 'Error',
+        description: 'Item ID is missing',
+        duration: 5,
+        placement: 'topRight',
+      });
+      return;
+    }
+    console.log('Navigating to view:', itemId);
+    navigate(`/${entity}/view/${itemId}`, { replace: true });
+  };
+
+  const handleEdit = async (item: Item) => {
+    if (!selectedEndpoint) return;
+    const idField = selectedEndpoint.idField || 'id';
+    const itemId = item[idField];
+    if (!itemId) {
+      api.error({
+        message: 'Error',
+        description: 'Item ID is missing',
+        duration: 5,
+        placement: 'topRight',
+      });
+      return;
+    }
+    console.log('Navigating to edit:', itemId);
+    navigate(`/${entity}/edit/${itemId}`, { replace: true });
+  };
+
+  const handleModalClose = () => {
+    console.log('Closing modal');
+    setModalState({ type: null, item: null });
+    navigate(`/${entity}`, { replace: true });
+  };
+
+  const handleDetailModalClose = () => {
+    console.log('Closing detail modal');
+    setModalState({ type: null, item: null });
+    navigate(`/${entity}`, { replace: true });
+  };
+
+  // Main effect to handle URL parameters and data fetching
+  useEffect(() => {
+    let isSubscribed = true;
+
+    const loadData = async () => {
+      console.log('URL params effect triggered:', { entity, operation, id });
+
+      if (entity) {
+        const endpoint = config.endpoints.find((e) => e.key === entity);
+        if (endpoint && isSubscribed) {
+          console.log('Setting endpoint:', endpoint.key);
+          setSelectedEndpoint(endpoint);
+
+          try {
+            setLoading(true);
+            const response = await apiClient.get(endpoint.url, {
+              params: {
+                page: pagination.current,
+                limit: pagination.pageSize,
+              },
+            });
+
+            if (!isSubscribed) return;
+
+            const itemsData = response.data.data || response.data;
+            const total =
+              response.data.count || response.data.total || itemsData.length;
+
+            setItems(itemsData);
+            setPagination((prev) => ({
+              ...prev,
+              total,
+            }));
+
+            // Handle operation and ID after data is loaded
+            if (operation && id) {
+              console.log('Checking for item:', { operation, id });
+              const item = itemsData.find(
+                (item: Item) => String(item[endpoint.idField || 'id']) === id
+              );
+
+              if (item && isSubscribed) {
+                console.log('Found item:', item);
+                setModalState({ type: operation, item });
+              } else if (isSubscribed) {
+                console.log('Item not found, fetching individually');
+                const itemResponse = await apiClient.get(
+                  `${endpoint.url}/${id}`
+                );
+                const itemData = itemResponse.data.data || itemResponse.data;
+                if (isSubscribed) {
+                  setModalState({ type: operation, item: itemData });
+                }
+              }
+            }
+          } catch (err) {
+            if (!isSubscribed) return;
+            const errorMessage =
+              err instanceof Error ? err.message : 'Unknown error occurred';
+            console.error('Error loading data:', errorMessage);
+            setError(errorMessage);
+            api.error({
+              message: 'Error',
+              description: `Failed to load data: ${errorMessage}`,
+              duration: 5,
+              placement: 'topRight',
+            });
+          } finally {
+            if (isSubscribed) {
+              setLoading(false);
+            }
+          }
+        }
+      } else if (config.endpoints.length > 0) {
+        navigate(`/${config.endpoints[0].key}`, { replace: true });
+      }
+    };
+
+    loadData();
+
+    return () => {
+      isSubscribed = false;
+    };
+  }, [entity, operation, id, pagination.current, pagination.pageSize]);
+
+  // Effect to handle modal visibility based on modalState
+  useEffect(() => {
+    console.log('Modal state changed:', modalState);
+    if (modalState.type && modalState.item) {
+      if (modalState.type === 'view') {
+        console.log('Setting view modal');
+        setSelectedItem(modalState.item);
+        setDetailModalVisible(true);
+      } else if (modalState.type === 'edit') {
+        console.log('Setting edit modal');
+        setEditingItem(modalState.item);
+        form.setFieldsValue(modalState.item);
+        setIsModalVisible(true);
+      }
+    } else if (!operation || !id) {
+      // Only clear modals if we're not supposed to show one
+      console.log('Clearing modals');
+      setDetailModalVisible(false);
+      setSelectedItem(null);
+      setIsModalVisible(false);
+      setEditingItem(null);
+    }
+  }, [modalState, form, operation, id]);
 
   useEffect(() => {
     const searchParams = new URLSearchParams(location.search);
@@ -145,61 +370,36 @@ export default function ItemCrud({ apiClient, config }: ItemCrudProps) {
     }
   }, [pagination.current, pagination.pageSize, selectedEndpoint, navigate]);
 
-  const fetchItems = useCallback(
-    async (retry = false) => {
-      if (!selectedEndpoint) return;
-
-      try {
-        setLoading(true);
-        setError(null);
-        const response = await apiClient.get(selectedEndpoint.url, {
-          params: {
-            page: paginationRef.current.current,
-            limit: paginationRef.current.pageSize,
-          },
-        });
-
-        // Handle both array and paginated response formats
-        const itemsData = response.data.data || response.data;
-        const total =
-          response.data.count || response.data.total || itemsData.length;
-
-        setItems(itemsData);
-        setPagination((prev) => ({
-          ...prev,
-          total: total,
-          current: paginationRef.current.current,
-          pageSize: paginationRef.current.pageSize,
-        }));
-        setRetryCount(0);
-      } catch (err) {
-        const errorMessage =
-          err instanceof Error ? err.message : 'Unknown error occurred';
-        setError(errorMessage);
-
-        if (retry && retryCount < MAX_RETRIES) {
-          setRetryCount((prev) => prev + 1);
-          setTimeout(() => fetchItems(true), 1000 * retryCount);
-        } else {
-          api.error({
-            message: 'Error',
-            description: `Failed to fetch items: ${errorMessage}`,
-            duration: 5,
-            placement: 'topRight',
-          });
-        }
-      } finally {
-        setLoading(false);
-      }
-    },
-    [selectedEndpoint, retryCount, api, apiClient]
-  );
-
-  useEffect(() => {
-    if (selectedEndpoint) {
-      fetchItems();
+  const fetchItemById = async (itemId: string) => {
+    console.log('Fetching item by ID:', itemId);
+    if (!selectedEndpoint || !operation) {
+      console.log('Missing required params for fetchItemById:', {
+        selectedEndpoint,
+        operation,
+      });
+      return;
     }
-  }, [selectedEndpoint, fetchItems, pagination.current, pagination.pageSize]);
+    try {
+      setLoading(true);
+      const response = await apiClient.get(`${selectedEndpoint.url}/${itemId}`);
+      const itemData = response.data.data || response.data;
+      console.log('Fetched item data:', itemData);
+      setModalState({ type: operation, item: itemData });
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : 'Unknown error occurred';
+      console.error('Error fetching item:', errorMessage);
+      api.error({
+        message: 'Error',
+        description: `Failed to fetch item: ${errorMessage}`,
+        duration: 5,
+        placement: 'topRight',
+      });
+      navigate(`/${entity}`);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSubmit = async (values: Record<string, unknown>) => {
     if (!selectedEndpoint) return;
@@ -210,10 +410,11 @@ export default function ItemCrud({ apiClient, config }: ItemCrudProps) {
 
       if (editingItem) {
         const idField = selectedEndpoint.idField || 'id';
-        await apiClient.patch(
-          `${selectedEndpoint.url}/${editingItem[idField]}`,
-          values
-        );
+        const itemId = editingItem[idField];
+        if (!itemId) {
+          throw new Error('Item ID is missing');
+        }
+        await apiClient.patch(`${selectedEndpoint.url}/${itemId}`, values);
         api.success({
           message: 'Success',
           description: 'Item updated successfully',
@@ -230,9 +431,7 @@ export default function ItemCrud({ apiClient, config }: ItemCrudProps) {
         });
       }
 
-      form.resetFields();
-      setEditingItem(null);
-      setIsModalVisible(false);
+      handleModalClose();
       fetchItems();
     } catch (err) {
       const errorMessage =
@@ -249,44 +448,8 @@ export default function ItemCrud({ apiClient, config }: ItemCrudProps) {
     }
   };
 
-  const handleEdit = async (item: Item) => {
-    if (!selectedEndpoint) return;
-
-    try {
-      setLoading(true);
-      const idField = selectedEndpoint.idField || 'id';
-      const itemId = item[idField];
-      if (!itemId) {
-        throw new Error(`Item ${idField} is missing`);
-      }
-      const response = await apiClient.get(`${selectedEndpoint.url}/${itemId}`);
-      const itemData = response.data.data || response.data;
-      setEditingItem(itemData);
-
-      // Close and reopen modal to ensure form is properly initialized
-      setIsModalVisible(false);
-      setTimeout(() => {
-        form.resetFields();
-        form.setFieldsValue(itemData);
-        setIsModalVisible(true);
-      }, 0);
-    } catch (err) {
-      const errorMessage =
-        err instanceof Error ? err.message : 'Unknown error occurred';
-      api.error({
-        message: 'Error',
-        description: `Failed to load item: ${errorMessage}`,
-        duration: 5,
-        placement: 'topRight',
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleDelete = async (id: string) => {
     if (!selectedEndpoint) return;
-
     setDeleteInput('');
     setItemToDelete(id);
     setDeleteModalVisible(true);
@@ -324,16 +487,6 @@ export default function ItemCrud({ apiClient, config }: ItemCrudProps) {
     }
   };
 
-  const handleRowClick = (record: Item, event: React.MouseEvent) => {
-    // Check if the click was on a button or its children
-    const target = event.target as HTMLElement;
-    if (target.closest('button')) {
-      return;
-    }
-    setSelectedItem(record);
-    setDetailModalVisible(true);
-  };
-
   const renderFormField = (field: FieldConfig) => {
     const rules: Rule[] = [
       { required: !field.isNullable, message: `${field.label} is required` },
@@ -341,7 +494,6 @@ export default function ItemCrud({ apiClient, config }: ItemCrudProps) {
 
     if (field.validator) {
       if (typeof field.validator === 'string') {
-        // Check if it's a validator function from the validator package
         const validatorFn =
           validator[field.validator as keyof typeof validator];
         if (typeof validatorFn === 'function') {
@@ -350,10 +502,8 @@ export default function ItemCrud({ apiClient, config }: ItemCrudProps) {
               if (typeof value !== 'string') {
                 throw new Error('Value must be a string');
               }
-              // Type assertion to handle different validator function signatures
               const isValid = (validatorFn as (str: string) => boolean)(value);
               if (!isValid) {
-                // Get the error message from the validator function if available
                 const errorMessage =
                   validator[
                     `${field.validator}Message` as keyof typeof validator
@@ -367,7 +517,6 @@ export default function ItemCrud({ apiClient, config }: ItemCrudProps) {
           });
         }
       } else {
-        // Handle custom validator function from config
         const validatorFn = field.validator;
         rules.push({
           validator: async (_: unknown, value: unknown) => {
@@ -551,10 +700,7 @@ export default function ItemCrud({ apiClient, config }: ItemCrudProps) {
     <Modal
       title='Item Details'
       open={detailModalVisible}
-      onCancel={() => {
-        setDetailModalVisible(false);
-        setSelectedItem(null);
-      }}
+      onCancel={handleDetailModalClose}
       footer={null}
       width={800}>
       {selectedItem && selectedEndpoint && (
@@ -580,8 +726,52 @@ export default function ItemCrud({ apiClient, config }: ItemCrudProps) {
               </div>
             );
           })}
+          <div style={{ marginTop: '16px', textAlign: 'right' }}>
+            <Space>
+              <Button onClick={handleDetailModalClose}>Close</Button>
+              <Button
+                type='primary'
+                onClick={() => {
+                  const idField = selectedEndpoint.idField || 'id';
+                  navigate(`/${entity}/edit/${selectedItem[idField]}`);
+                }}>
+                Edit
+              </Button>
+            </Space>
+          </div>
         </div>
       )}
+    </Modal>
+  );
+
+  const EditModal = (
+    <Modal
+      title={editingItem ? 'Edit Item' : 'Add New Item'}
+      open={isModalVisible}
+      onCancel={handleModalClose}
+      footer={null}
+      width={600}>
+      <Spin spinning={loading}>
+        <Form form={form} layout='vertical' onFinish={handleSubmit}>
+          {selectedEndpoint?.fields
+            .filter((field) =>
+              editingItem
+                ? field.isPutable || field.isPatchable
+                : field.isPostable
+            )
+            .map((field) => (
+              <div key={field.key}>{renderFormField(field)}</div>
+            ))}
+          <Form.Item>
+            <Space>
+              <Button type='primary' htmlType='submit'>
+                {editingItem ? 'Update' : 'Add'} Item
+              </Button>
+              <Button onClick={handleModalClose}>Cancel</Button>
+            </Space>
+          </Form.Item>
+        </Form>
+      </Spin>
     </Modal>
   );
 
@@ -614,6 +804,7 @@ export default function ItemCrud({ apiClient, config }: ItemCrudProps) {
       {contextHolder}
       {DeleteConfirmationModal}
       {DetailModal}
+      {EditModal}
       <Sider
         width={250}
         theme='light'
@@ -729,46 +920,6 @@ export default function ItemCrud({ apiClient, config }: ItemCrudProps) {
                     />
                   </Spin>
                 </Card>
-
-                <Modal
-                  title={editingItem ? 'Edit Item' : 'Add New Item'}
-                  open={isModalVisible}
-                  onCancel={() => {
-                    setIsModalVisible(false);
-                    form.resetFields();
-                    setEditingItem(null);
-                  }}
-                  footer={null}
-                  width={600}>
-                  <Spin spinning={loading}>
-                    <Form form={form} layout='vertical' onFinish={handleSubmit}>
-                      {selectedEndpoint?.fields
-                        .filter((field) =>
-                          editingItem
-                            ? field.isPutable || field.isPatchable
-                            : field.isPostable
-                        )
-                        .map((field) => (
-                          <div key={field.key}>{renderFormField(field)}</div>
-                        ))}
-                      <Form.Item>
-                        <Space>
-                          <Button type='primary' htmlType='submit'>
-                            {editingItem ? 'Update' : 'Add'} Item
-                          </Button>
-                          <Button
-                            onClick={() => {
-                              setIsModalVisible(false);
-                              form.resetFields();
-                              setEditingItem(null);
-                            }}>
-                            Cancel
-                          </Button>
-                        </Space>
-                      </Form.Item>
-                    </Form>
-                  </Spin>
-                </Modal>
               </>
             )}
           </ErrorBoundary>

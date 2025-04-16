@@ -387,14 +387,14 @@ function App() {
   };
 
   return (
-    <BrowserRouter>
-      <ConfigProvider
-        theme={{
-          token: {
-            colorPrimary: '#1890ff',
-          },
-        }}>
-        <AntApp notification={{ placement: 'bottomRight', duration: 5 }}>
+    <ConfigProvider
+      theme={{
+        token: {
+          colorPrimary: '#1890ff',
+        },
+      }}>
+      <AntApp notification={{ placement: 'bottomRight', duration: 5 }}>
+        <BrowserRouter>
           <div
             style={{
               width: '100vw',
@@ -411,22 +411,21 @@ function App() {
                 overflow: 'hidden',
               }}>
               <Routes>
+                <Route path='/' element={<Navigate to='/users' replace />} />
                 <Route
                   path='/:entity'
                   element={<ItemCrud apiClient={apiClient} config={config} />}
                 />
                 <Route
-                  path='/'
-                  element={
-                    <Navigate to={`/${config.endpoints[0].key}`} replace />
-                  }
+                  path='/:entity/:operation/:id'
+                  element={<ItemCrud apiClient={apiClient} config={config} />}
                 />
               </Routes>
             </div>
           </div>
-        </AntApp>
-      </ConfigProvider>
-    </BrowserRouter>
+        </BrowserRouter>
+      </AntApp>
+    </ConfigProvider>
   );
 }
 
