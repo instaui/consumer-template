@@ -278,14 +278,21 @@ export default function ItemCrud({
 
   const handleRowClick = (record: Item, event: React.MouseEvent) => {
     const target = event.target as HTMLElement;
-    // Check if the click is on a button, image, or file link
-    if (
+
+    // Check if the click is on any interactive element
+    const isInteractiveElement =
       target.closest('button') ||
       target.closest('img') ||
-      target.closest('a')
-    ) {
+      target.closest('a') ||
+      target.closest('.ant-btn-link') || // Relation field buttons
+      target.closest('.ant-select') || // Select dropdowns
+      target.closest('.ant-switch') || // Switch components
+      target.closest('.ant-upload'); // Upload components
+
+    if (isInteractiveElement) {
       return;
     }
+
     const idField = selectedEndpoint?.idField;
     if (!idField) {
       api.error({
@@ -894,7 +901,10 @@ export default function ItemCrud({
                     type='link'
                     onClick={(e) => {
                       e.stopPropagation();
-                      navigate(`/${field.relation!.entity}/view/${idValue}`);
+                      // Use window.location.href to navigate without triggering React Router effects
+                      window.location.href = `/${
+                        field.relation!.entity
+                      }/view/${idValue}`;
                     }}>
                     View {field.label}
                   </Button>
@@ -1029,9 +1039,10 @@ export default function ItemCrud({
       return (
         <Button
           type='link'
-          onClick={() =>
-            navigate(`/${field.relation!.entity}/view/${idValue}`)
-          }>
+          onClick={() => {
+            // Use window.location.href to navigate without triggering React Router effects
+            window.location.href = `/${field.relation!.entity}/view/${idValue}`;
+          }}>
           View {field.label}
         </Button>
       );
