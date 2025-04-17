@@ -40,7 +40,6 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom';
 
 import { AxiosInstance } from 'axios';
 import type { ColumnsType } from 'antd/es/table';
-import { ErrorBoundary } from 'react-error-boundary';
 import type { RcFile } from 'antd/es/upload';
 import type { ReactNode } from 'react';
 
@@ -176,10 +175,6 @@ const RelationField: React.FC<RelationFieldProps> = ({
     </Form.Item>
   );
 };
-
-interface FilterState {
-  [key: string]: string[];
-}
 
 const FilterRow: React.FC<{
   fields: FieldConfig[];
@@ -319,7 +314,6 @@ export default function ItemCrud({
   }>();
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [editingItem, setEditingItem] = useState<Item | null>(null);
   const [form] = Form.useForm();
   const [isModalVisible, setIsModalVisible] = useState(false);
@@ -362,132 +356,58 @@ export default function ItemCrud({
   const isMountedRef = useRef<boolean>(true);
   const requestLockRef = useRef<boolean>(false);
   const lastRequestTimeRef = useRef<number>(0);
-  const MIN_REQUEST_INTERVAL = 1000; // 1 second minimum between requests
+  const MIN_REQUEST_INTERVAL = 400;
+
+  // Request queue and debouncing mechanism
+  const requestQueueRef = useRef<(() => Promise<void>)[]>([]);
+  const isProcessingRef = useRef<boolean>(false);
+
+  // Request tracking
+  const requestIdRef = useRef<number>(0);
+  const lastRequestParamsRef = useRef<string>('');
 
   // Cleanup function to prevent memory leaks and state updates after unmount
   useEffect(() => {
     isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
-      if (fetchTimeoutRef.current) {
-        window.clearTimeout(fetchTimeoutRef.current);
-        fetchTimeoutRef.current = null;
-      }
-      requestLockRef.current = false;
     };
   }, []);
 
-  // Parse filters from URL on component mount and URL changes
-  useEffect(() => {
-    const searchParams = new URLSearchParams(location.search);
-    const newFilters: Record<string, string[]> = {};
-
-    // Extract filter parameters from URL
-    searchParams.forEach((value, key) => {
-      // Skip pagination and sorting parameters
-      if (
-        key === 'page' ||
-        key === 'pageSize' ||
-        key === 'sort' ||
-        key === 'order'
-      ) {
-        return;
-      }
-
-      // Handle range filters (min/max)
-      if (key.endsWith('[min]') || key.endsWith('[max]')) {
-        const baseKey = key.replace(/\[min\]$|\[max\]$/, '');
-        if (!newFilters[baseKey]) {
-          newFilters[baseKey] = [];
-        }
-
-        if (key.endsWith('[min]')) {
-          newFilters[baseKey][0] = value;
-        } else {
-          newFilters[baseKey][1] = value;
-        }
-      } else {
-        // Handle regular filters
-        newFilters[key] = value.split(',');
-      }
-    });
-
-    setFilters(newFilters);
-  }, [location.search]);
-
   const fetchItems = useCallback(async () => {
-    if (!selectedEndpoint || isFetching || requestLockRef.current) {
+    if (!selectedEndpoint) {
       return;
     }
 
-    // Check if we've made a request recently
-    const now = Date.now();
-    const timeSinceLastRequest = now - lastRequestTimeRef.current;
-
-    if (timeSinceLastRequest < MIN_REQUEST_INTERVAL) {
-      // If we've made a request recently, schedule a new one
-      if (fetchTimeoutRef.current) {
-        window.clearTimeout(fetchTimeoutRef.current);
-        fetchTimeoutRef.current = null;
-      }
-
-      fetchTimeoutRef.current = window.setTimeout(() => {
-        fetchItems();
-      }, MIN_REQUEST_INTERVAL - timeSinceLastRequest);
-
-      return;
-    }
-
-    // Clear any existing timeout
-    if (fetchTimeoutRef.current) {
-      window.clearTimeout(fetchTimeoutRef.current);
-      fetchTimeoutRef.current = null;
-    }
-
-    // Set request lock
-    requestLockRef.current = true;
-    lastRequestTimeRef.current = now;
+    const currentRequestId = ++requestIdRef.current;
 
     try {
       setIsFetching(true);
       setLoading(true);
-      setError(null);
 
-      // Use the current URL parameters directly
-      const params = new URLSearchParams(location.search);
-
-      // Ensure pagination parameters are set
-      if (!params.has('page')) {
-        params.set('page', String(pagination.current));
-      }
-      if (!params.has('pageSize')) {
-        params.set('pageSize', String(pagination.pageSize));
-      }
-
-      // Ensure sorting parameters are set
-      if (sorting.field && !params.has('sort')) {
-        params.set('sort', sorting.field);
-        params.set('order', sorting.order === 'ascend' ? 'asc' : 'desc');
-      }
-
-      console.log('Request params:', params.toString());
-
+      const searchParams = new URLSearchParams(location.search);
       const response = await apiClient.get(selectedEndpoint.url, {
-        params,
+        params: searchParams,
       });
 
-      if (!isMountedRef.current) return;
+      // Only process the response if this is still the latest request
+      if (!isMountedRef.current || currentRequestId !== requestIdRef.current) {
+        return;
+      }
 
-      // Handle both array and paginated response formats
       const itemsData = response.data.data || response.data;
       const total =
         response.data.count || response.data.total || itemsData.length;
 
-      // Ensure each item has the ID field properly mapped
+      setPagination({
+        current: parseInt(searchParams.get('page') || '1', 10),
+        pageSize: parseInt(searchParams.get('pageSize') || '10', 10),
+        total: total,
+      });
+
       const processedItems = itemsData.map((item: Item) => {
         const idField = selectedEndpoint.idField;
         if (idField && !item[idField]) {
-          // If the ID field is configured but missing in the item, try to find it
           const possibleIdFields = ['id', 'uid', '_id'];
           for (const field of possibleIdFields) {
             if (item[field]) {
@@ -500,16 +420,13 @@ export default function ItemCrud({
       });
 
       setItems(processedItems);
-      setPagination((prev) => ({
-        ...prev,
-        total: total,
-      }));
     } catch (err) {
-      if (!isMountedRef.current) return;
+      if (!isMountedRef.current || currentRequestId !== requestIdRef.current) {
+        return;
+      }
 
       const errorMessage =
         err instanceof Error ? err.message : 'Unknown error occurred';
-      setError(errorMessage);
       api.error({
         message: 'Error',
         description: `Failed to fetch items: ${errorMessage}`,
@@ -517,158 +434,142 @@ export default function ItemCrud({
         placement: 'topRight',
       });
     } finally {
-      if (isMountedRef.current) {
+      if (isMountedRef.current && currentRequestId === requestIdRef.current) {
         setLoading(false);
         setIsFetching(false);
+      }
+    }
+  }, [selectedEndpoint, api, apiClient, location.search]);
 
-        // Release the request lock after a delay
-        setTimeout(() => {
-          requestLockRef.current = false;
-        }, MIN_REQUEST_INTERVAL);
+  // Single effect to handle all data fetching
+  useEffect(() => {
+    let isSubscribed = true;
+
+    const loadData = async () => {
+      if (!entity || !isSubscribed) {
+        return;
+      }
+
+      const endpoint = config.endpoints.find((e) => e.key === entity);
+      if (!endpoint) {
+        return;
+      }
+
+      // Handle entity change
+      if (selectedEndpoint?.key !== entity) {
+        setPagination({ current: 1, pageSize: 10, total: 0 });
+        setFilters({});
+        setSorting({ field: null, order: 'ascend' });
+        navigate(`/${entity}`, { replace: true });
+        setSelectedEndpoint(endpoint);
+        return;
+      }
+
+      // Handle specific item view/edit
+      if (operation && id) {
+        fetchItemById(id);
+        return;
+      }
+
+      // Handle list view
+      fetchItems();
+    };
+
+    loadData();
+
+    return () => {
+      isSubscribed = false;
+    };
+  }, [entity, operation, id, selectedEndpoint, fetchItems]);
+
+  // Effect to handle URL changes
+  useEffect(() => {
+    if (!selectedEndpoint || operation || id) {
+      return;
+    }
+
+    const searchParams = new URLSearchParams(location.search);
+    const page = searchParams.get('page');
+    const pageSize = searchParams.get('pageSize');
+
+    if (page || pageSize) {
+      const newPage = page ? parseInt(page, 10) : 1;
+      const newPageSize = pageSize ? parseInt(pageSize, 10) : 10;
+
+      if (
+        newPage !== pagination.current ||
+        newPageSize !== pagination.pageSize
+      ) {
+        fetchItems();
       }
     }
   }, [
+    location.search,
     selectedEndpoint,
-    api,
-    apiClient,
+    operation,
+    id,
     pagination.current,
     pagination.pageSize,
-    sorting,
-    location.search,
-    isFetching,
+    fetchItems,
   ]);
 
-  // Effect to handle URL parameters and data fetching
-  useEffect(() => {
-    let isSubscribed = true;
+  const handleTableChange = (
+    pagination: TablePaginationConfig,
+    filters: Record<string, FilterValue | null>,
+    sorter: SorterResult<Item> | SorterResult<Item>[]
+  ) => {
+    const searchParams = new URLSearchParams(location.search);
 
-    const loadData = async () => {
-      if (entity) {
-        const endpoint = config.endpoints.find((e) => e.key === entity);
-        if (endpoint && isSubscribed) {
-          // Only reset pagination and filters if the entity has changed
-          const prevEntity = selectedEndpoint?.key;
-          if (prevEntity !== entity) {
-            // Reset all state
-            setPagination({
-              current: 1,
-              pageSize: 10,
-              total: 0,
-            });
-            setFilters({});
-            setSorting({
-              field: null,
-              order: 'ascend',
-            });
-
-            // Reset URL to base state
-            navigate(`/${entity}`, { replace: true });
-          }
-
-          setSelectedEndpoint(endpoint);
-
-          // If we're viewing or editing a specific item, fetch it directly
-          if (operation && id) {
-            fetchItemById(id);
-          } else {
-            // Otherwise fetch the list of items
-            fetchItems();
-          }
-        }
-      } else if (config.endpoints.length > 0) {
-        navigate(`/${config.endpoints[0].key}`, { replace: true });
-      }
-    };
-
-    loadData();
-
-    return () => {
-      isSubscribed = false;
-    };
-  }, [entity, operation, id, fetchItems, selectedEndpoint]);
-
-  // Update the main effect to handle URL parameters and data fetching
-  useEffect(() => {
-    let isSubscribed = true;
-
-    const loadData = async () => {
-      if (entity) {
-        const endpoint = config.endpoints.find((e) => e.key === entity);
-        if (endpoint && isSubscribed) {
-          // Only reset pagination and filters if the entity has changed
-          const prevEntity = selectedEndpoint?.key;
-          if (prevEntity !== entity) {
-            // Reset all state
-            setPagination({
-              current: 1,
-              pageSize: 10,
-              total: 0,
-            });
-            setFilters({});
-            setSorting({
-              field: null,
-              order: 'ascend',
-            });
-
-            // Reset URL to base state
-            navigate(`/${entity}`, { replace: true });
-          }
-
-          setSelectedEndpoint(endpoint);
-
-          // If we're viewing or editing a specific item, fetch it directly
-          if (operation && id) {
-            fetchItemById(id);
-          } else {
-            // Otherwise fetch the list of items
-            fetchItems();
-          }
-        }
-      } else if (config.endpoints.length > 0) {
-        navigate(`/${config.endpoints[0].key}`, { replace: true });
-      }
-    };
-
-    loadData();
-
-    return () => {
-      isSubscribed = false;
-    };
-  }, [entity, operation, id, fetchItems, selectedEndpoint]);
-
-  // Update the FilterRow component to use URL parameters
-  const handleFilterChange = (newFilters: Record<string, string[]>) => {
-    // Create a new URLSearchParams from the current URL
-    const searchParams = new URLSearchParams();
-
-    // Set pagination parameters
-    searchParams.set('page', '1');
-    searchParams.set('pageSize', String(pagination.pageSize));
-
-    // Set sorting parameters if they exist
-    if (sorting.field) {
-      searchParams.set('sort', sorting.field);
-      searchParams.set('order', sorting.order === 'ascend' ? 'asc' : 'desc');
-    }
-
-    // Add new filter parameters
-    Object.entries(newFilters).forEach(([key, value]) => {
-      if (value && value.length > 0) {
+    // Preserve existing filters
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value) {
         if (Array.isArray(value)) {
-          if (value.length === 2) {
-            searchParams.set(`${key}[min]`, String(value[0]));
-            searchParams.set(`${key}[max]`, String(value[1]));
-          } else {
-            searchParams.set(key, value.map(String).join(','));
-          }
+          searchParams.set(key, value.join(','));
         } else {
           searchParams.set(key, String(value));
         }
+      } else {
+        searchParams.delete(key);
       }
     });
 
-    // Update the URL
-    navigate(`${location.pathname}?${searchParams.toString()}`);
+    // Update pagination
+    searchParams.set('page', String(pagination.current));
+    searchParams.set('pageSize', String(pagination.pageSize));
+
+    // Handle sorting
+    if (Array.isArray(sorter)) {
+      if (sorter.length > 0 && sorter[0].column) {
+        const field = sorter[0].field as string;
+        const order = sorter[0].order;
+
+        if (order) {
+          searchParams.set('sort', field);
+          searchParams.set('order', order === 'ascend' ? 'asc' : 'desc');
+        } else {
+          searchParams.delete('sort');
+          searchParams.delete('order');
+        }
+      }
+    } else if (sorter.column) {
+      const field = sorter.field as string;
+      const order = sorter.order;
+
+      if (order) {
+        searchParams.set('sort', field);
+        searchParams.set('order', order === 'ascend' ? 'asc' : 'desc');
+      } else {
+        searchParams.delete('sort');
+        searchParams.delete('order');
+      }
+    } else {
+      searchParams.delete('sort');
+      searchParams.delete('order');
+    }
+
+    navigate(`${location.pathname}?${searchParams.toString()}`, {
+      replace: true,
+    });
   };
 
   const handleRowClick = (record: Item, event: React.MouseEvent) => {
@@ -795,29 +696,12 @@ export default function ItemCrud({
     }
   }, [modalState, form, operation, id]);
 
-  // Fix the URL parameter handling in the useEffect
-  useEffect(() => {
-    const searchParams = new URLSearchParams(location.search);
-    const page = searchParams.get('page');
-    const pageSize = searchParams.get('pageSize');
-    // Remove unused variables
-
-    if (page || pageSize) {
-      setPagination((prev) => ({
-        ...prev,
-        current: page ? parseInt(page, 10) : prev.current,
-        pageSize: pageSize ? parseInt(pageSize, 10) : prev.pageSize,
-      }));
-    }
-  }, [location.search]);
-
   const fetchItemById = async (itemId: string) => {
     if (!selectedEndpoint || !operation) {
       return;
     }
     try {
       setLoading(true);
-      setError(null);
 
       // Clear existing state
       if (operation === 'edit') {
@@ -845,7 +729,6 @@ export default function ItemCrud({
     } catch (err) {
       const errorMessage =
         err instanceof Error ? err.message : 'Unknown error occurred';
-      setError(errorMessage);
       api.error({
         message: 'Error',
         description: `Failed to fetch item: ${errorMessage}`,
@@ -864,7 +747,6 @@ export default function ItemCrud({
 
     try {
       setLoading(true);
-      setError(null);
 
       // Check if there are any file fields
       const hasFileFields = selectedEndpoint.fields.some(
@@ -957,7 +839,6 @@ export default function ItemCrud({
     } catch (err) {
       const errorMessage =
         err instanceof Error ? err.message : 'Unknown error occurred';
-      setError(errorMessage);
       api.error({
         message: 'Error',
         description: `Failed to save item: ${errorMessage}`,
@@ -981,7 +862,6 @@ export default function ItemCrud({
 
     try {
       setLoading(true);
-      setError(null);
       await apiClient.delete(`${selectedEndpoint.url}/${itemToDelete}`);
       api.success({
         message: 'Success',
@@ -993,7 +873,6 @@ export default function ItemCrud({
     } catch (err) {
       const errorMessage =
         err instanceof Error ? err.message : 'Unknown error occurred';
-      setError(errorMessage);
       api.error({
         message: 'Error',
         description: `Failed to delete item: ${errorMessage}`,
@@ -1389,25 +1268,6 @@ export default function ItemCrud({
       ]
     : [];
 
-  const ErrorFallback = ({
-    error,
-    resetErrorBoundary,
-  }: {
-    error: Error;
-    resetErrorBoundary: () => void;
-  }) => (
-    <Result
-      status='error'
-      title='Something went wrong'
-      subTitle={error.message}
-      extra={[
-        <Button type='primary' key='retry' onClick={resetErrorBoundary}>
-          Try Again
-        </Button>,
-      ]}
-    />
-  );
-
   const DeleteConfirmationModal = (
     <Modal
       title='Confirm Deletion'
@@ -1635,57 +1495,41 @@ export default function ItemCrud({
     setIsModalVisible(true);
   };
 
-  const handleTableChange = (
-    pagination: TablePaginationConfig,
-    filters: Record<string, FilterValue | null>,
-    sorter: SorterResult<Item> | SorterResult<Item>[]
-  ) => {
-    // Update pagination state
-    setPagination({
-      current: pagination.current ?? 1,
-      pageSize: pagination.pageSize ?? 10,
-      total: pagination.total ?? 0,
-    });
-
-    // Create new URL parameters
+  // Add handleFilterChange function
+  const handleFilterChange = (newFilters: Record<string, string[]>) => {
+    // Create a new URLSearchParams from the current URL
     const searchParams = new URLSearchParams(location.search);
 
-    // Update pagination parameters
-    searchParams.set('page', String(pagination.current));
+    // Set pagination parameters
+    searchParams.set('page', '1');
     searchParams.set('pageSize', String(pagination.pageSize));
 
-    // Handle sorting
-    if (Array.isArray(sorter)) {
-      if (sorter.length > 0 && sorter[0].column) {
-        const field = sorter[0].field as string;
-        const order = sorter[0].order;
-
-        if (order) {
-          searchParams.set('sort', field);
-          searchParams.set('order', order === 'ascend' ? 'asc' : 'desc');
-        } else {
-          searchParams.delete('sort');
-          searchParams.delete('order');
-        }
-      }
-    } else if (sorter.column) {
-      const field = sorter.field as string;
-      const order = sorter.order;
-
-      if (order) {
-        searchParams.set('sort', field);
-        searchParams.set('order', order === 'ascend' ? 'asc' : 'desc');
-      } else {
-        searchParams.delete('sort');
-        searchParams.delete('order');
-      }
-    } else {
-      searchParams.delete('sort');
-      searchParams.delete('order');
+    // Set sorting parameters if they exist
+    if (sorting.field) {
+      searchParams.set('sort', sorting.field);
+      searchParams.set('order', sorting.order === 'ascend' ? 'asc' : 'desc');
     }
 
-    // Update URL with new parameters
-    navigate(`${location.pathname}?${searchParams.toString()}`);
+    // Add new filter parameters
+    Object.entries(newFilters).forEach(([key, value]) => {
+      if (value && value.length > 0) {
+        if (Array.isArray(value)) {
+          if (value.length === 2) {
+            searchParams.set(`${key}[min]`, String(value[0]));
+            searchParams.set(`${key}[max]`, String(value[1]));
+          } else {
+            searchParams.set(key, value.map(String).join(','));
+          }
+        } else {
+          searchParams.set(key, String(value));
+        }
+      }
+    });
+
+    // Update the URL
+    navigate(`${location.pathname}?${searchParams.toString()}`, {
+      replace: true,
+    });
   };
 
   return (
