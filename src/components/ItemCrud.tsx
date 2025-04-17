@@ -1605,7 +1605,14 @@ export default function ItemCrud({
           }}
         />
       </Sider>
-      <Layout style={{ background: '#fff', padding: '24px', flex: 1 }}>
+      <Layout
+        style={{
+          background: '#fff',
+          padding: '24px',
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+        }}>
         <div
           style={{ marginBottom: 16, display: 'flex', alignItems: 'center' }}>
           <h1 style={{ margin: 0 }}>{selectedEndpoint?.label}</h1>
@@ -1623,20 +1630,34 @@ export default function ItemCrud({
           currentFilters={filters}
         />
 
-        <Table
-          dataSource={items}
-          columns={columns}
-          rowKey={(record) =>
-            record[selectedEndpoint?.idField || 'id'] as string
-          }
-          pagination={pagination}
-          loading={loading}
-          onChange={handleTableChange}
-          onRow={(record) => ({
-            onClick: (event) => handleRowClick(record, event),
-            style: { cursor: 'pointer' },
-          })}
-        />
+        <div
+          style={{
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            minHeight: 0,
+          }}>
+          <Table
+            dataSource={items}
+            columns={columns}
+            rowKey={(record) =>
+              record[selectedEndpoint?.idField || 'id'] as string
+            }
+            pagination={{
+              ...pagination,
+              position: ['bottomCenter'],
+              style: { marginBottom: 0 },
+            }}
+            loading={loading}
+            onChange={handleTableChange}
+            onRow={(record) => ({
+              onClick: (event) => handleRowClick(record, event),
+              style: { cursor: 'pointer' },
+            })}
+            scroll={{ x: 'max-content', y: 'calc(100vh - 400px)' }}
+            style={{ flex: 1, minHeight: 0 }}
+          />
+        </div>
 
         {EditModal}
         {DetailModal}
