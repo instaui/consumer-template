@@ -63,6 +63,8 @@ function App() {
           isRequired: true,
           isReadOnly: true,
           shouldShowInListView: true,
+          filterable: true,
+          filterType: 'eq',
         },
         {
           key: 'fname',
@@ -73,6 +75,8 @@ function App() {
           isPatchable: true,
           isPutable: true,
           isPostable: true,
+          filterable: true,
+          filterType: 'eq',
         },
         {
           key: 'lname',
@@ -83,6 +87,8 @@ function App() {
           isPatchable: true,
           isPutable: true,
           isPostable: true,
+          filterable: true,
+          filterType: 'eq',
         },
         {
           key: 'email',
@@ -93,6 +99,8 @@ function App() {
           isPatchable: true,
           isPutable: true,
           isPostable: true,
+          filterable: true,
+          filterType: 'eq',
         },
         {
           key: 'photo',
@@ -114,6 +122,8 @@ function App() {
           isPatchable: true,
           isPutable: true,
           isPostable: true,
+          filterable: true,
+          filterType: 'boolean',
           renderInList: (value) => (
             <span
               style={{ color: value ? 'green' : 'red', fontWeight: 'bold' }}>
@@ -150,6 +160,8 @@ function App() {
           isRequired: true,
           isReadOnly: true,
           shouldShowInListView: true,
+          filterable: true,
+          filterType: 'eq',
         },
         {
           key: 'fname',
@@ -160,6 +172,8 @@ function App() {
           isPatchable: true,
           isPutable: true,
           isPostable: true,
+          filterable: true,
+          filterType: 'eq',
         },
         {
           key: 'lname',
@@ -170,6 +184,8 @@ function App() {
           isPatchable: true,
           isPutable: true,
           isPostable: true,
+          filterable: true,
+          filterType: 'eq',
         },
         {
           key: 'name',
@@ -180,6 +196,8 @@ function App() {
           isPatchable: true,
           isPutable: true,
           isPostable: true,
+          filterable: true,
+          filterType: 'eq',
         },
         {
           key: 'email',
@@ -190,6 +208,8 @@ function App() {
           isPatchable: true,
           isPutable: true,
           isPostable: true,
+          filterable: true,
+          filterType: 'eq',
         },
         {
           key: 'photo',
@@ -215,6 +235,8 @@ function App() {
           isPatchable: true,
           isPutable: true,
           isPostable: true,
+          filterable: true,
+          filterType: 'eq',
           renderInList: formatStatus,
           renderInDetail: formatStatus,
         },
@@ -258,6 +280,8 @@ function App() {
           isRequired: true,
           isReadOnly: true,
           shouldShowInListView: true,
+          filterable: true,
+          filterType: 'eq',
         },
         {
           key: 'name',
@@ -268,6 +292,8 @@ function App() {
           isPatchable: true,
           isPutable: true,
           isPostable: true,
+          filterable: true,
+          filterType: 'eq',
         },
         {
           key: 'description',
@@ -278,6 +304,8 @@ function App() {
           isPatchable: true,
           isPutable: true,
           isPostable: true,
+          filterable: true,
+          filterType: 'eq',
         },
         {
           key: 'price',
@@ -290,6 +318,8 @@ function App() {
           isPostable: true,
           renderInList: formatCurrency,
           renderInDetail: formatCurrency,
+          filterable: true,
+          filterType: 'range',
         },
         {
           key: 'status',
@@ -300,6 +330,8 @@ function App() {
           isPatchable: true,
           isPutable: true,
           isPostable: true,
+          filterable: true,
+          filterType: 'boolean',
           renderInList: (value) => (
             <span
               style={{ color: value ? 'green' : 'red', fontWeight: 'bold' }}>

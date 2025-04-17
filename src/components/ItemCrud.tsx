@@ -1,6 +1,5 @@
 import {
   Button,
-  Card,
   Drawer,
   Form,
   Image,
@@ -9,7 +8,7 @@ import {
   Layout,
   Menu,
   Modal,
-  Result,
+  Row,
   Select,
   Space,
   Spin,
@@ -26,12 +25,13 @@ import {
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   PictureOutlined,
-  ReloadOutlined,
 } from '@ant-design/icons';
 import type {
+  FilterDropdownProps,
   FilterValue,
   SortOrder,
   SorterResult,
+  TablePaginationConfig,
 } from 'antd/es/table/interface';
 import type { FormInstance, Rule } from 'antd/es/form';
 import type { UploadChangeParam, UploadFile } from 'antd/es/upload/interface';
@@ -43,9 +43,8 @@ import type { ColumnsType } from 'antd/es/table';
 import { ErrorBoundary } from 'react-error-boundary';
 import type { RcFile } from 'antd/es/upload';
 import type { ReactNode } from 'react';
-import type { TablePaginationConfig } from 'antd/es/table';
 
-const { Sider, Content } = Layout;
+const { Sider } = Layout;
 
 interface ValidationResult {
   status: boolean;
@@ -88,6 +87,8 @@ export interface FieldConfig {
     idField: string;
     keyColumns: string[];
   };
+  filterable?: boolean;
+  filterType?: 'eq' | 'range' | 'boolean';
 }
 
 export interface EndpointConfig {
@@ -176,6 +177,125 @@ const RelationField: React.FC<RelationFieldProps> = ({
   );
 };
 
+interface FilterState {
+  [key: string]: string[];
+}
+
+const FilterRow: React.FC<{
+  fields: FieldConfig[];
+  onFilterChange: (filters: Record<string, string[]>) => void;
+  currentFilters: Record<string, string[]>;
+}> = ({ fields, onFilterChange, currentFilters }) => {
+  const [localFilters, setLocalFilters] =
+    useState<Record<string, string[]>>(currentFilters);
+
+  const handleFilterChange = (key: string, value: string | string[] | null) => {
+    const newFilters = { ...localFilters };
+    if (value === null || (Array.isArray(value) && value.length === 0)) {
+      delete newFilters[key];
+    } else {
+      newFilters[key] = Array.isArray(value) ? value : [value];
+    }
+    setLocalFilters(newFilters);
+  };
+
+  const applyFilters = () => {
+    onFilterChange(localFilters);
+  };
+
+  // Filter out non-filterable fields
+  const filterableFields = fields.filter((field) => field.filterable);
+
+  // If there are no filterable fields, don't render the filter row
+  if (filterableFields.length === 0) {
+    return null;
+  }
+
+  return (
+    <Row
+      style={{
+        padding: '12px 24px',
+        background: '#fafafa',
+        borderBottom: '1px solid #f0f0f0',
+        display: 'flex',
+        flexWrap: 'wrap',
+        alignItems: 'flex-end',
+      }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', flex: 1 }}>
+        {filterableFields.map((field) => (
+          <div key={field.key} style={{ marginRight: 16, marginBottom: 8 }}>
+            <div style={{ marginBottom: 4, fontSize: 12, color: '#666' }}>
+              {field.label}
+            </div>
+            {field.filterType === 'range' ? (
+              <Space>
+                <InputNumber
+                  placeholder='Min'
+                  style={{ width: 100 }}
+                  value={localFilters[`${field.key}_from`]?.[0]}
+                  onChange={(value) =>
+                    handleFilterChange(
+                      `${field.key}_from`,
+                      value ? [String(value)] : null
+                    )
+                  }
+                />
+                <InputNumber
+                  placeholder='Max'
+                  style={{ width: 100 }}
+                  value={localFilters[`${field.key}_to`]?.[0]}
+                  onChange={(value) =>
+                    handleFilterChange(
+                      `${field.key}_to`,
+                      value ? [String(value)] : null
+                    )
+                  }
+                />
+              </Space>
+            ) : field.filterType === 'boolean' ? (
+              <Select
+                allowClear
+                placeholder='Select'
+                style={{ width: 120 }}
+                value={localFilters[field.key]?.[0]}
+                onChange={(value) => handleFilterChange(field.key, value)}
+                options={[
+                  { label: 'Yes', value: 'true' },
+                  { label: 'No', value: 'false' },
+                ]}
+              />
+            ) : field.type === 'select' ? (
+              <Select
+                allowClear
+                placeholder='Select'
+                style={{ width: 120 }}
+                value={localFilters[field.key]?.[0]}
+                onChange={(value) => handleFilterChange(field.key, value)}
+                options={field.options}
+              />
+            ) : (
+              <Input
+                placeholder={`Search ${field.label}`}
+                style={{ width: 150 }}
+                value={localFilters[field.key]?.[0]}
+                onChange={(e) =>
+                  handleFilterChange(field.key, e.target.value || null)
+                }
+                allowClear
+              />
+            )}
+          </div>
+        ))}
+      </div>
+      <div style={{ marginLeft: 16, marginBottom: 8 }}>
+        <Button type='primary' onClick={applyFilters}>
+          Apply Filters
+        </Button>
+      </div>
+    </Row>
+  );
+};
+
 export default function ItemCrud({
   apiClient,
   config,
@@ -220,6 +340,53 @@ export default function ItemCrud({
 
   const [collapsed, setCollapsed] = useState(false);
 
+  const [sorting, setSorting] = useState<{
+    field: string | null;
+    order: SortOrder;
+  }>({
+    field: null,
+    order: 'ascend',
+  });
+  const [filters, setFilters] = useState<FilterState>({});
+
+  // Parse filters from URL on component mount and URL changes
+  useEffect(() => {
+    const searchParams = new URLSearchParams(location.search);
+    const newFilters: FilterState = {};
+
+    // Extract filter parameters from URL
+    searchParams.forEach((value, key) => {
+      // Skip pagination and sorting parameters
+      if (
+        key === 'page' ||
+        key === 'pageSize' ||
+        key === 'sort' ||
+        key === 'order'
+      ) {
+        return;
+      }
+
+      // Handle range filters (from/to)
+      if (key.endsWith('_from') || key.endsWith('_to')) {
+        const baseKey = key.replace(/_from$|_to$/, '');
+        if (!newFilters[baseKey]) {
+          newFilters[baseKey] = [];
+        }
+
+        if (key.endsWith('_from')) {
+          newFilters[baseKey][0] = value;
+        } else {
+          newFilters[baseKey][1] = value;
+        }
+      } else {
+        // Handle regular filters
+        newFilters[key] = value.split(',');
+      }
+    });
+
+    setFilters(newFilters);
+  }, [location.search]);
+
   const fetchItems = useCallback(async () => {
     if (!selectedEndpoint) {
       return;
@@ -229,24 +396,24 @@ export default function ItemCrud({
       setLoading(true);
       setError(null);
 
-      // Get all parameters from URL
-      const searchParams = new URLSearchParams(location.search);
-      const page = searchParams.get('page');
-      const pageSize = searchParams.get('pageSize');
-      const sort = searchParams.get('sort');
-      const order = searchParams.get('order');
+      // Use the current URL parameters directly
+      const params = new URLSearchParams(location.search);
 
-      // Build params object
-      const params: Record<string, string | number> = {
-        page: page ? parseInt(page, 10) : pagination.current,
-        limit: pageSize ? parseInt(pageSize, 10) : pagination.pageSize,
-      };
-
-      // Include sorting parameters if they exist in the URL
-      if (sort) {
-        params.sort = sort;
-        params.order = order || 'asc';
+      // Ensure pagination parameters are set
+      if (!params.has('page')) {
+        params.set('page', String(pagination.current));
       }
+      if (!params.has('pageSize')) {
+        params.set('pageSize', String(pagination.pageSize));
+      }
+
+      // Ensure sorting parameters are set
+      if (sorting.field && !params.has('sort')) {
+        params.set('sort', sorting.field);
+        params.set('order', sorting.order === 'ascend' ? 'asc' : 'desc');
+      }
+
+      console.log('Request params:', params.toString());
 
       const response = await apiClient.get(selectedEndpoint.url, {
         params,
@@ -297,8 +464,49 @@ export default function ItemCrud({
     apiClient,
     pagination.current,
     pagination.pageSize,
+    sorting,
     location.search,
   ]);
+
+  // Update the FilterRow component to use URL parameters
+  const handleFilterChange = (newFilters: Record<string, string[]>) => {
+    // Create a new URLSearchParams from the current URL
+    const searchParams = new URLSearchParams(location.search);
+
+    // Remove all existing filter parameters
+    searchParams.forEach((_, key) => {
+      if (
+        key !== 'page' &&
+        key !== 'pageSize' &&
+        key !== 'sort' &&
+        key !== 'order'
+      ) {
+        searchParams.delete(key);
+      }
+    });
+
+    // Add new filter parameters
+    Object.entries(newFilters).forEach(([key, value]) => {
+      if (value && value.length > 0) {
+        if (Array.isArray(value)) {
+          if (value.length === 2) {
+            searchParams.set(`${key}_from`, String(value[0]));
+            searchParams.set(`${key}_to`, String(value[1]));
+          } else {
+            searchParams.set(key, value.map(String).join(','));
+          }
+        } else {
+          searchParams.set(key, String(value));
+        }
+      }
+    });
+
+    // Reset to page 1 when filters change
+    searchParams.set('page', '1');
+
+    // Update the URL
+    navigate(`${location.pathname}?${searchParams.toString()}`);
+  };
 
   const handleRowClick = (record: Item, event: React.MouseEvent) => {
     const target = event.target as HTMLElement;
@@ -903,6 +1111,63 @@ export default function ItemCrud({
                       ? 'ascend'
                       : 'descend') as SortOrder)
                   : undefined,
+              filters: field.filterable
+                ? field.filterType === 'boolean'
+                  ? [
+                      { text: 'Yes', value: true },
+                      { text: 'No', value: false },
+                    ]
+                  : undefined
+                : undefined,
+              filterMode:
+                field.filterable && field.filterType === 'eq'
+                  ? ('tree' as const)
+                  : undefined,
+              filterSearch: field.filterable && field.filterType === 'eq',
+              filterDropdown:
+                field.filterable && field.filterType === 'range'
+                  ? ({
+                      setSelectedKeys,
+                      selectedKeys,
+                      confirm,
+                      clearFilters,
+                    }: FilterDropdownProps) => (
+                      <div style={{ padding: 8 }}>
+                        <Input
+                          placeholder='Min'
+                          value={selectedKeys[0] as string}
+                          onChange={(e) =>
+                            setSelectedKeys(
+                              e.target.value
+                                ? [e.target.value, selectedKeys[1]]
+                                : []
+                            )
+                          }
+                          style={{ width: 100, marginRight: 8 }}
+                        />
+                        <Input
+                          placeholder='Max'
+                          value={selectedKeys[1] as string}
+                          onChange={(e) =>
+                            setSelectedKeys([selectedKeys[0], e.target.value])
+                          }
+                          style={{ width: 100 }}
+                        />
+                        <Button
+                          type='primary'
+                          onClick={() => confirm()}
+                          size='small'
+                          style={{ width: 90, marginRight: 8 }}>
+                          Filter
+                        </Button>
+                        {clearFilters && (
+                          <Button onClick={() => clearFilters()} size='small'>
+                            Reset
+                          </Button>
+                        )}
+                      </div>
+                    )
+                  : undefined,
               render: (value: unknown) => {
                 if (field.renderInList) {
                   return field.renderInList(
@@ -1247,69 +1512,42 @@ export default function ItemCrud({
   };
 
   const handleTableChange = (
-    newPagination: TablePaginationConfig,
+    pagination: TablePaginationConfig,
     filters: Record<string, FilterValue | null>,
     sorter: SorterResult<Item> | SorterResult<Item>[]
   ) => {
-    // Get current URL parameters
-    const searchParams = new URLSearchParams(location.search);
-
-    // Handle pagination changes
-    if (
-      newPagination.current !== pagination.current ||
-      newPagination.pageSize !== pagination.pageSize
-    ) {
-      searchParams.set('page', newPagination.current?.toString() || '1');
-      searchParams.set('pageSize', newPagination.pageSize?.toString() || '10');
-    }
-
-    // Handle sorting changes
-    const currentSort = searchParams.get('sort');
-    const currentOrder = searchParams.get('order');
-
-    // Check if we have a valid sorter object
-    if (!Array.isArray(sorter) && sorter.field) {
-      // Determine the new sort order
-      let newOrder: string;
-
-      if (sorter.field === currentSort) {
-        // If clicking the same field, toggle between ascend and descend
-        // When current order is 'desc', next click should be 'asc'
-        // When current order is 'asc', next click should be 'desc'
-        newOrder = currentOrder === 'desc' ? 'asc' : 'desc';
-      } else {
-        // If clicking a new field, default to ascending
-        newOrder = 'asc';
-      }
-
-      // Update URL parameters
-      searchParams.set('sort', sorter.field as string);
-      searchParams.set('order', newOrder);
-    }
-    // Handle the case when sorter becomes undefined (third click)
-    else if (!Array.isArray(sorter) && !sorter.field && currentSort) {
-      // Toggle the current sort order
-      const newOrder = currentOrder === 'desc' ? 'asc' : 'desc';
-      searchParams.set('sort', currentSort);
-      searchParams.set('order', newOrder);
-    }
-    // Handle the case when no sorting is selected
-    else if (Array.isArray(sorter) && sorter.length === 0) {
-      // If no sorting is selected, default to the first sortable field in ascending order
-      const firstSortableField = selectedEndpoint?.fields.find(
-        (f) => f.shouldShowInListView
-      )?.key;
-
-      if (firstSortableField) {
-        searchParams.set('sort', firstSortableField);
-        searchParams.set('order', 'asc');
-      }
-    }
-
-    // Update URL without triggering navigation
-    navigate(`${location.pathname}?${searchParams.toString()}`, {
-      replace: true,
+    setPagination({
+      current: pagination.current ?? 1,
+      pageSize: pagination.pageSize ?? 10,
+      total: pagination.total ?? 0,
     });
+
+    // Handle sorting
+    if (Array.isArray(sorter)) {
+      if (sorter.length > 0 && sorter[0].column) {
+        setSorting({
+          field: sorter[0].field as string,
+          order: sorter[0].order || 'ascend',
+        });
+      }
+    } else if (sorter.column) {
+      setSorting({
+        field: sorter.field as string,
+        order: sorter.order || 'ascend',
+      });
+    }
+
+    // Update URL with pagination and sorting
+    const searchParams = new URLSearchParams(location.search);
+    searchParams.set('page', String(pagination.current));
+    searchParams.set('pageSize', String(pagination.pageSize));
+
+    if (sorter && !Array.isArray(sorter) && sorter.field) {
+      searchParams.set('sort', String(sorter.field));
+      searchParams.set('order', sorter.order === 'ascend' ? 'asc' : 'desc');
+    }
+
+    navigate(`${location.pathname}?${searchParams.toString()}`);
   };
 
   return (
@@ -1322,136 +1560,70 @@ export default function ItemCrud({
         height: '100%',
       }}>
       {contextHolder}
-      {DeleteConfirmationModal}
-      {DetailModal}
-      {EditModal}
       <Sider
-        width={250}
-        theme='light'
+        trigger={null}
         collapsible
         collapsed={collapsed}
-        onCollapse={(value) => setCollapsed(value)}
-        trigger={
-          <div style={{ textAlign: 'center', padding: '8px' }}>
-            {collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-          </div>
-        }
-        style={{
-          background: '#fff',
-          borderRight: '1px solid #f0f0f0',
-          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.06)',
-          overflow: 'auto',
-          height: '100%',
-        }}>
+        style={{ background: '#fff' }}>
         <Menu
           mode='inline'
-          selectedKeys={selectedEndpoint ? [selectedEndpoint.key] : []}
-          style={{ height: '100%', borderRight: 0 }}>
-          {config.endpoints.map((endpoint) => (
-            <Menu.Item
-              key={endpoint.key}
-              onClick={() => navigate(`/${endpoint.key}`)}>
-              {endpoint.label}
-            </Menu.Item>
-          ))}
-        </Menu>
-      </Sider>
-      <Layout
-        style={{
-          background: 'transparent',
-          height: '100%',
-          display: 'flex',
-          flexDirection: 'column',
-        }}>
-        <Content
+          selectedKeys={[entity || '']}
+          items={config.endpoints.map((endpoint) => ({
+            key: endpoint.key,
+            label: endpoint.label,
+            onClick: () => navigate(`/${endpoint.key}`),
+          }))}
+        />
+        <Button
+          type='text'
+          icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+          onClick={() => setCollapsed(!collapsed)}
           style={{
-            flex: 1,
-            overflow: 'auto',
-            padding: 0,
-          }}>
-          <ErrorBoundary
-            FallbackComponent={ErrorFallback}
-            onReset={() => setError(null)}>
-            {error && !loading ? (
-              <Card
-                style={{
-                  height: '100%',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                }}>
-                <div
-                  style={{
-                    color: 'red',
-                    fontSize: '16px',
-                    marginBottom: '16px',
-                  }}>
-                  {error}
-                </div>
-                <Button
-                  type='primary'
-                  onClick={() => fetchItems()}
-                  icon={<ReloadOutlined />}>
-                  Retry
-                </Button>
-              </Card>
-            ) : (
-              <>
-                <Card
-                  title={`${
-                    selectedEndpoint?.label || 'Select an endpoint'
-                  } Management`}
-                  extra={
-                    <Button type='primary' onClick={handleAddNew}>
-                      Add New Item
-                    </Button>
-                  }
-                  style={{
-                    height: '100%',
-                    display: 'flex',
-                    flexDirection: 'column',
-                  }}
-                  bodyStyle={{
-                    flex: 1,
-                    padding: 0,
-                    overflow: 'hidden',
-                  }}>
-                  <Spin
-                    spinning={loading}
-                    tip='Loading...'
-                    size='large'
-                    style={{
-                      maxHeight: '100%',
-                      padding: '20px',
-                    }}>
-                    <Table
-                      dataSource={items}
-                      columns={columns}
-                      rowKey={(record) =>
-                        String(record[selectedEndpoint?.idField || 'id'])
-                      }
-                      onChange={handleTableChange}
-                      onRow={(record) => ({
-                        onClick: (event) => handleRowClick(record, event),
-                        style: { cursor: 'pointer' },
-                      })}
-                      pagination={{
-                        current: pagination.current,
-                        pageSize: pagination.pageSize,
-                        total: pagination.total,
-                        showSizeChanger: true,
-                        showQuickJumper: true,
-                      }}
-                      style={{ height: '100%' }}
-                      scroll={{ y: 'calc(100vh - 200px)' }}
-                    />
-                  </Spin>
-                </Card>
-              </>
-            )}
-          </ErrorBoundary>
-        </Content>
+            width: '100%',
+            borderRadius: 0,
+            position: 'absolute',
+            bottom: 0,
+            left: 0,
+            borderTop: '1px solid #f0f0f0',
+          }}
+        />
+      </Sider>
+      <Layout style={{ background: '#fff', padding: '24px', flex: 1 }}>
+        <div
+          style={{ marginBottom: 16, display: 'flex', alignItems: 'center' }}>
+          <h1 style={{ margin: 0 }}>{selectedEndpoint?.label}</h1>
+          <Button
+            type='primary'
+            onClick={() => handleAddNew()}
+            style={{ marginLeft: 'auto' }}>
+            Add New {selectedEndpoint?.label}
+          </Button>
+        </div>
+
+        <FilterRow
+          fields={selectedEndpoint?.fields || []}
+          onFilterChange={handleFilterChange}
+          currentFilters={filters}
+        />
+
+        <Table
+          dataSource={items}
+          columns={columns}
+          rowKey={(record) =>
+            record[selectedEndpoint?.idField || 'id'] as string
+          }
+          pagination={pagination}
+          loading={loading}
+          onChange={handleTableChange}
+          onRow={(record) => ({
+            onClick: (event) => handleRowClick(record, event),
+            style: { cursor: 'pointer' },
+          })}
+        />
+
+        {EditModal}
+        {DetailModal}
+        {DeleteConfirmationModal}
       </Layout>
     </Layout>
   );
