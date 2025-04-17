@@ -441,6 +441,45 @@ export default function ItemCrud({
     }
   }, [selectedEndpoint, api, apiClient, location.search]);
 
+  // Effect to sync initial URL parameters
+  useEffect(() => {
+    if (!selectedEndpoint) {
+      return;
+    }
+
+    const searchParams = new URLSearchParams(location.search);
+
+    // Sync pagination
+    const page = searchParams.get('page');
+    const pageSize = searchParams.get('pageSize');
+    if (page || pageSize) {
+      setPagination({
+        current: page ? parseInt(page, 10) : 1,
+        pageSize: pageSize ? parseInt(pageSize, 10) : 10,
+        total: pagination.total,
+      });
+    }
+
+    // Sync sorting
+    const sort = searchParams.get('sort');
+    const order = searchParams.get('order');
+    if (sort) {
+      setSorting({
+        field: sort,
+        order: order === 'desc' ? 'descend' : 'ascend',
+      });
+    }
+
+    // Sync filters
+    const newFilters: Record<string, string[]> = {};
+    searchParams.forEach((value, key) => {
+      if (!['page', 'pageSize', 'sort', 'order'].includes(key)) {
+        newFilters[key] = value.split(',');
+      }
+    });
+    setFilters(newFilters);
+  }, [selectedEndpoint, location.search]);
+
   // Single effect to handle all data fetching
   useEffect(() => {
     let isSubscribed = true;
@@ -457,10 +496,6 @@ export default function ItemCrud({
 
       // Handle entity change
       if (selectedEndpoint?.key !== entity) {
-        setPagination({ current: 1, pageSize: 10, total: 0 });
-        setFilters({});
-        setSorting({ field: null, order: 'ascend' });
-        navigate(`/${entity}`, { replace: true });
         setSelectedEndpoint(endpoint);
         return;
       }
