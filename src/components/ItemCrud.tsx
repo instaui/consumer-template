@@ -189,6 +189,11 @@ const FilterRow: React.FC<{
   const [localFilters, setLocalFilters] =
     useState<Record<string, string[]>>(currentFilters);
 
+  // Reset local filters when currentFilters change (e.g., when navigating between pages)
+  useEffect(() => {
+    setLocalFilters(currentFilters);
+  }, [currentFilters]);
+
   const handleFilterChange = (key: string, value: string | string[] | null) => {
     const newFilters = { ...localFilters };
     if (value === null || (Array.isArray(value) && value.length === 0)) {
@@ -232,22 +237,26 @@ const FilterRow: React.FC<{
                 <InputNumber
                   placeholder='Min'
                   style={{ width: 100 }}
-                  value={localFilters[`${field.key}_from`]?.[0]}
+                  value={localFilters[field.key]?.[0]}
                   onChange={(value) =>
                     handleFilterChange(
-                      `${field.key}_from`,
-                      value ? [String(value)] : null
+                      field.key,
+                      value
+                        ? [String(value), localFilters[field.key]?.[1] || '']
+                        : null
                     )
                   }
                 />
                 <InputNumber
                   placeholder='Max'
                   style={{ width: 100 }}
-                  value={localFilters[`${field.key}_to`]?.[0]}
+                  value={localFilters[field.key]?.[1]}
                   onChange={(value) =>
                     handleFilterChange(
-                      `${field.key}_to`,
-                      value ? [String(value)] : null
+                      field.key,
+                      value
+                        ? [localFilters[field.key]?.[0] || '', String(value)]
+                        : null
                     )
                   }
                 />
@@ -347,12 +356,31 @@ export default function ItemCrud({
     field: null,
     order: 'ascend',
   });
-  const [filters, setFilters] = useState<FilterState>({});
+  const [filters, setFilters] = useState<Record<string, string[]>>({});
+  const [isFetching, setIsFetching] = useState(false);
+  const fetchTimeoutRef = useRef<number | null>(null);
+  const isMountedRef = useRef<boolean>(true);
+  const requestLockRef = useRef<boolean>(false);
+  const lastRequestTimeRef = useRef<number>(0);
+  const MIN_REQUEST_INTERVAL = 1000; // 1 second minimum between requests
+
+  // Cleanup function to prevent memory leaks and state updates after unmount
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      if (fetchTimeoutRef.current) {
+        window.clearTimeout(fetchTimeoutRef.current);
+        fetchTimeoutRef.current = null;
+      }
+      requestLockRef.current = false;
+    };
+  }, []);
 
   // Parse filters from URL on component mount and URL changes
   useEffect(() => {
     const searchParams = new URLSearchParams(location.search);
-    const newFilters: FilterState = {};
+    const newFilters: Record<string, string[]> = {};
 
     // Extract filter parameters from URL
     searchParams.forEach((value, key) => {
@@ -366,14 +394,14 @@ export default function ItemCrud({
         return;
       }
 
-      // Handle range filters (from/to)
-      if (key.endsWith('_from') || key.endsWith('_to')) {
-        const baseKey = key.replace(/_from$|_to$/, '');
+      // Handle range filters (min/max)
+      if (key.endsWith('[min]') || key.endsWith('[max]')) {
+        const baseKey = key.replace(/\[min\]$|\[max\]$/, '');
         if (!newFilters[baseKey]) {
           newFilters[baseKey] = [];
         }
 
-        if (key.endsWith('_from')) {
+        if (key.endsWith('[min]')) {
           newFilters[baseKey][0] = value;
         } else {
           newFilters[baseKey][1] = value;
@@ -388,11 +416,40 @@ export default function ItemCrud({
   }, [location.search]);
 
   const fetchItems = useCallback(async () => {
-    if (!selectedEndpoint) {
+    if (!selectedEndpoint || isFetching || requestLockRef.current) {
       return;
     }
 
+    // Check if we've made a request recently
+    const now = Date.now();
+    const timeSinceLastRequest = now - lastRequestTimeRef.current;
+
+    if (timeSinceLastRequest < MIN_REQUEST_INTERVAL) {
+      // If we've made a request recently, schedule a new one
+      if (fetchTimeoutRef.current) {
+        window.clearTimeout(fetchTimeoutRef.current);
+        fetchTimeoutRef.current = null;
+      }
+
+      fetchTimeoutRef.current = window.setTimeout(() => {
+        fetchItems();
+      }, MIN_REQUEST_INTERVAL - timeSinceLastRequest);
+
+      return;
+    }
+
+    // Clear any existing timeout
+    if (fetchTimeoutRef.current) {
+      window.clearTimeout(fetchTimeoutRef.current);
+      fetchTimeoutRef.current = null;
+    }
+
+    // Set request lock
+    requestLockRef.current = true;
+    lastRequestTimeRef.current = now;
+
     try {
+      setIsFetching(true);
       setLoading(true);
       setError(null);
 
@@ -418,6 +475,8 @@ export default function ItemCrud({
       const response = await apiClient.get(selectedEndpoint.url, {
         params,
       });
+
+      if (!isMountedRef.current) return;
 
       // Handle both array and paginated response formats
       const itemsData = response.data.data || response.data;
@@ -446,6 +505,8 @@ export default function ItemCrud({
         total: total,
       }));
     } catch (err) {
+      if (!isMountedRef.current) return;
+
       const errorMessage =
         err instanceof Error ? err.message : 'Unknown error occurred';
       setError(errorMessage);
@@ -456,7 +517,15 @@ export default function ItemCrud({
         placement: 'topRight',
       });
     } finally {
-      setLoading(false);
+      if (isMountedRef.current) {
+        setLoading(false);
+        setIsFetching(false);
+
+        // Release the request lock after a delay
+        setTimeout(() => {
+          requestLockRef.current = false;
+        }, MIN_REQUEST_INTERVAL);
+      }
     }
   }, [
     selectedEndpoint,
@@ -466,32 +535,129 @@ export default function ItemCrud({
     pagination.pageSize,
     sorting,
     location.search,
+    isFetching,
   ]);
+
+  // Effect to handle URL parameters and data fetching
+  useEffect(() => {
+    let isSubscribed = true;
+
+    const loadData = async () => {
+      if (entity) {
+        const endpoint = config.endpoints.find((e) => e.key === entity);
+        if (endpoint && isSubscribed) {
+          // Only reset pagination and filters if the entity has changed
+          const prevEntity = selectedEndpoint?.key;
+          if (prevEntity !== entity) {
+            // Reset all state
+            setPagination({
+              current: 1,
+              pageSize: 10,
+              total: 0,
+            });
+            setFilters({});
+            setSorting({
+              field: null,
+              order: 'ascend',
+            });
+
+            // Reset URL to base state
+            navigate(`/${entity}`, { replace: true });
+          }
+
+          setSelectedEndpoint(endpoint);
+
+          // If we're viewing or editing a specific item, fetch it directly
+          if (operation && id) {
+            fetchItemById(id);
+          } else {
+            // Otherwise fetch the list of items
+            fetchItems();
+          }
+        }
+      } else if (config.endpoints.length > 0) {
+        navigate(`/${config.endpoints[0].key}`, { replace: true });
+      }
+    };
+
+    loadData();
+
+    return () => {
+      isSubscribed = false;
+    };
+  }, [entity, operation, id, fetchItems, selectedEndpoint]);
+
+  // Update the main effect to handle URL parameters and data fetching
+  useEffect(() => {
+    let isSubscribed = true;
+
+    const loadData = async () => {
+      if (entity) {
+        const endpoint = config.endpoints.find((e) => e.key === entity);
+        if (endpoint && isSubscribed) {
+          // Only reset pagination and filters if the entity has changed
+          const prevEntity = selectedEndpoint?.key;
+          if (prevEntity !== entity) {
+            // Reset all state
+            setPagination({
+              current: 1,
+              pageSize: 10,
+              total: 0,
+            });
+            setFilters({});
+            setSorting({
+              field: null,
+              order: 'ascend',
+            });
+
+            // Reset URL to base state
+            navigate(`/${entity}`, { replace: true });
+          }
+
+          setSelectedEndpoint(endpoint);
+
+          // If we're viewing or editing a specific item, fetch it directly
+          if (operation && id) {
+            fetchItemById(id);
+          } else {
+            // Otherwise fetch the list of items
+            fetchItems();
+          }
+        }
+      } else if (config.endpoints.length > 0) {
+        navigate(`/${config.endpoints[0].key}`, { replace: true });
+      }
+    };
+
+    loadData();
+
+    return () => {
+      isSubscribed = false;
+    };
+  }, [entity, operation, id, fetchItems, selectedEndpoint]);
 
   // Update the FilterRow component to use URL parameters
   const handleFilterChange = (newFilters: Record<string, string[]>) => {
     // Create a new URLSearchParams from the current URL
-    const searchParams = new URLSearchParams(location.search);
+    const searchParams = new URLSearchParams();
 
-    // Remove all existing filter parameters
-    searchParams.forEach((_, key) => {
-      if (
-        key !== 'page' &&
-        key !== 'pageSize' &&
-        key !== 'sort' &&
-        key !== 'order'
-      ) {
-        searchParams.delete(key);
-      }
-    });
+    // Set pagination parameters
+    searchParams.set('page', '1');
+    searchParams.set('pageSize', String(pagination.pageSize));
+
+    // Set sorting parameters if they exist
+    if (sorting.field) {
+      searchParams.set('sort', sorting.field);
+      searchParams.set('order', sorting.order === 'ascend' ? 'asc' : 'desc');
+    }
 
     // Add new filter parameters
     Object.entries(newFilters).forEach(([key, value]) => {
       if (value && value.length > 0) {
         if (Array.isArray(value)) {
           if (value.length === 2) {
-            searchParams.set(`${key}_from`, String(value[0]));
-            searchParams.set(`${key}_to`, String(value[1]));
+            searchParams.set(`${key}[min]`, String(value[0]));
+            searchParams.set(`${key}[max]`, String(value[1]));
           } else {
             searchParams.set(key, value.map(String).join(','));
           }
@@ -500,9 +666,6 @@ export default function ItemCrud({
         }
       }
     });
-
-    // Reset to page 1 when filters change
-    searchParams.set('page', '1');
 
     // Update the URL
     navigate(`${location.pathname}?${searchParams.toString()}`);
@@ -605,46 +768,6 @@ export default function ItemCrud({
       });
     }
   };
-
-  // Update the main effect to handle URL parameters and data fetching
-  useEffect(() => {
-    let isSubscribed = true;
-
-    const loadData = async () => {
-      if (entity) {
-        const endpoint = config.endpoints.find((e) => e.key === entity);
-        if (endpoint && isSubscribed) {
-          // Only reset pagination if the entity has changed
-          const prevEntity = selectedEndpoint?.key;
-          if (prevEntity !== entity) {
-            setPagination({
-              current: 1,
-              pageSize: 10,
-              total: 0,
-            });
-          }
-
-          setSelectedEndpoint(endpoint);
-
-          // If we're viewing or editing a specific item, fetch it directly
-          if (operation && id) {
-            fetchItemById(id);
-          } else {
-            // Otherwise fetch the list of items
-            fetchItems();
-          }
-        }
-      } else if (config.endpoints.length > 0) {
-        navigate(`/${config.endpoints[0].key}`, { replace: true });
-      }
-    };
-
-    loadData();
-
-    return () => {
-      isSubscribed = false;
-    };
-  }, [entity, operation, id, fetchItems, selectedEndpoint]);
 
   // Effect to handle modal visibility based on modalState
   useEffect(() => {
@@ -1100,17 +1223,18 @@ export default function ItemCrud({
             const currentSort = searchParams.get('sort');
             const currentOrder = searchParams.get('order');
 
+            // Determine the sort order for this column
+            let sortOrder: SortOrder | undefined = undefined;
+            if (currentSort === field.key) {
+              sortOrder = currentOrder === 'asc' ? 'ascend' : 'descend';
+            }
+
             return {
               title: field.label,
               dataIndex: field.key,
               key: field.key,
               sorter: true,
-              sortOrder:
-                currentSort === field.key
-                  ? ((currentOrder === 'asc'
-                      ? 'ascend'
-                      : 'descend') as SortOrder)
-                  : undefined,
+              sortOrder: sortOrder,
               filters: field.filterable
                 ? field.filterType === 'boolean'
                   ? [
@@ -1516,37 +1640,51 @@ export default function ItemCrud({
     filters: Record<string, FilterValue | null>,
     sorter: SorterResult<Item> | SorterResult<Item>[]
   ) => {
+    // Update pagination state
     setPagination({
       current: pagination.current ?? 1,
       pageSize: pagination.pageSize ?? 10,
       total: pagination.total ?? 0,
     });
 
-    // Handle sorting
-    if (Array.isArray(sorter)) {
-      if (sorter.length > 0 && sorter[0].column) {
-        setSorting({
-          field: sorter[0].field as string,
-          order: sorter[0].order || 'ascend',
-        });
-      }
-    } else if (sorter.column) {
-      setSorting({
-        field: sorter.field as string,
-        order: sorter.order || 'ascend',
-      });
-    }
-
-    // Update URL with pagination and sorting
+    // Create new URL parameters
     const searchParams = new URLSearchParams(location.search);
+
+    // Update pagination parameters
     searchParams.set('page', String(pagination.current));
     searchParams.set('pageSize', String(pagination.pageSize));
 
-    if (sorter && !Array.isArray(sorter) && sorter.field) {
-      searchParams.set('sort', String(sorter.field));
-      searchParams.set('order', sorter.order === 'ascend' ? 'asc' : 'desc');
+    // Handle sorting
+    if (Array.isArray(sorter)) {
+      if (sorter.length > 0 && sorter[0].column) {
+        const field = sorter[0].field as string;
+        const order = sorter[0].order;
+
+        if (order) {
+          searchParams.set('sort', field);
+          searchParams.set('order', order === 'ascend' ? 'asc' : 'desc');
+        } else {
+          searchParams.delete('sort');
+          searchParams.delete('order');
+        }
+      }
+    } else if (sorter.column) {
+      const field = sorter.field as string;
+      const order = sorter.order;
+
+      if (order) {
+        searchParams.set('sort', field);
+        searchParams.set('order', order === 'ascend' ? 'asc' : 'desc');
+      } else {
+        searchParams.delete('sort');
+        searchParams.delete('order');
+      }
+    } else {
+      searchParams.delete('sort');
+      searchParams.delete('order');
     }
 
+    // Update URL with new parameters
     navigate(`${location.pathname}?${searchParams.toString()}`);
   };
 
