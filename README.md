@@ -1,54 +1,174 @@
-# React + TypeScript + Vite
+# Item CRUD Application
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A React-based CRUD (Create, Read, Update, Delete) application with dynamic form generation, file uploads, and advanced filtering capabilities.
 
-Currently, two official plugins are available:
+## Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- Dynamic form generation based on configuration
+- File and image upload support
+- Advanced filtering and sorting
+- Pagination
+- Relation field support
+- Responsive design with drawer/modal views
+- Type-safe implementation
 
-## Expanding the ESLint configuration
+## Project Structure
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default tseslint.config({
-  extends: [
-    // Remove ...tseslint.configs.recommended and replace with this
-    ...tseslint.configs.recommendedTypeChecked,
-    // Alternatively, use this for stricter rules
-    ...tseslint.configs.strictTypeChecked,
-    // Optionally, add this for stylistic rules
-    ...tseslint.configs.stylisticTypeChecked,
-  ],
-  languageOptions: {
-    // other options...
-    parserOptions: {
-      project: ['./tsconfig.node.json', './tsconfig.app.json'],
-      tsconfigRootDir: import.meta.dirname,
-    },
-  },
-})
+```
+src/
+├── components/
+│   └── ItemCrud.tsx      # Main CRUD component
+├── constants/
+│   └── UI_CONSTANTS.ts   # UI-related constants
+└── App.tsx               # Application entry point
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Configuration
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+The application is configured through endpoint definitions in `App.tsx`. Each endpoint can define:
 
-export default tseslint.config({
-  plugins: {
-    // Add the react-x and react-dom plugins
-    'react-x': reactX,
-    'react-dom': reactDom,
-  },
-  rules: {
-    // other rules...
-    // Enable its recommended typescript rules
-    ...reactX.configs['recommended-typescript'].rules,
-    ...reactDom.configs.recommended.rules,
-  },
-})
+```typescript
+{
+  key: string;           // Unique identifier
+  label: string;         // Display name
+  url: string;          // API endpoint
+  idField?: string;     // Primary key field
+  fields: FieldConfig[]; // Field configurations
+  validator?: Function;  // Custom validation
+}
 ```
+
+### Field Types
+
+Supported field types:
+
+- text
+- textarea
+- number
+- email
+- select
+- date
+- boolean
+- url
+- relation
+- file
+- image
+
+### Field Configuration
+
+```typescript
+{
+  key: string;           // Field identifier
+  label: string;         // Display label
+  type: string;          // Field type
+  required?: boolean;    // Required field
+  readOnly?: boolean;    // Read-only field
+  isFile?: boolean;      // File upload field
+  isImage?: boolean;     // Image upload field
+  uploadUrl?: string;    // Custom upload URL
+  maxSize?: number;      // Max file size in MB
+  options?: Array<{      // For select fields
+    label: string;
+    value: string;
+  }>;
+  relation?: {           // For relation fields
+    entity: string;
+    idField: string;
+    keyColumns?: string[];
+  };
+}
+```
+
+## File Uploads
+
+The application supports two types of file uploads:
+
+1. **Direct Form Upload**
+
+   - Files are included in the main form submission
+   - Used when `uploadUrl` is not specified
+   - Files are sent as part of the multipart/form-data
+
+2. **Separate Upload**
+   - Files are uploaded to a separate endpoint first
+   - Used when `uploadUrl` is specified
+   - The response URL/ID is then included in the main form
+
+## Filtering and Sorting
+
+- Supports multiple filter types:
+  - Text search
+  - Range filters
+  - Boolean filters
+  - Select filters
+- Sortable columns
+- URL-based filter persistence
+
+## Usage
+
+1. Define your endpoints in `App.tsx`
+2. Configure fields for each endpoint
+3. The application will automatically generate:
+   - List view with filters
+   - Create/Edit forms
+   - Detail view
+   - File upload handling
+
+## API Integration
+
+The application expects the API to follow these conventions:
+
+```typescript
+interface APIResponse {
+  status: string;
+  message: string;
+  data: Item | Item[];
+  count?: number; // For pagination
+}
+```
+
+## Error Handling
+
+- Form validation errors
+- API error handling
+- File upload error handling
+- Network error handling
+
+## Styling
+
+- Uses Ant Design components
+- Responsive layout
+- Customizable through constants
+- Supports both modal and drawer views
+
+## Type Safety
+
+- Full TypeScript implementation
+- Type-safe field configurations
+- Type-safe API responses
+- Type-safe form handling
+
+## Development
+
+1. Install dependencies:
+
+   ```bash
+   npm install
+   # or
+   yarn install
+   ```
+
+2. Start development server:
+   ```bash
+   npm run dev
+   # or
+   yarn dev
+   ```
+
+## Dependencies
+
+- React
+- React Router
+- Ant Design
+- TypeScript
+- Axios (or compatible API client)
