@@ -844,82 +844,47 @@ export default function ItemCrud({
     try {
       setLoading(true);
 
-      // Check if there are any file fields
-      const hasFileFields = selectedEndpoint.fields.some(
-        (field) =>
-          (field.isFile || field.isImage) && values[field.key] instanceof File
-      );
+      // Create FormData for the request
+      const formData = new FormData();
 
-      // Format relation fields
-      const formattedValues = { ...values };
-      selectedEndpoint.fields.forEach((field) => {
-        if (field.type === 'relation' && field.relation && values[field.key]) {
-          formattedValues[field.key] = {
-            [field.relation.idField]: values[field.key],
-          };
+      // Add all form values to FormData
+      for (const [key, value] of Object.entries(values)) {
+        if (value instanceof File) {
+          // If it's a file, append it directly
+          formData.append(key, value);
+        } else if (typeof value === 'object' && value !== null) {
+          // Handle objects (convert to JSON string)
+          formData.append(key, JSON.stringify(value));
+        } else {
+          // For primitive values
+          formData.append(key, String(value));
         }
-      });
-
-      let requestData;
-      let headers = {};
-
-      if (hasFileFields) {
-        // Create FormData for file uploads
-        const formData = new FormData();
-
-        // Add all form values to FormData
-        Object.entries(formattedValues).forEach(([key, value]) => {
-          if (value instanceof File) {
-            // Handle File objects
-            formData.append(key, value);
-          } else if (typeof value === 'object' && value !== null) {
-            // Handle objects (convert to JSON string)
-            formData.append(key, JSON.stringify(value));
-          } else {
-            // Find the field configuration to check its type
-            const field = selectedEndpoint.fields.find((f) => f.key === key);
-            if (field?.type === 'number') {
-              // For number fields, convert to number before appending
-              formData.append(key, String(Number(value)));
-            } else {
-              // For other primitive values
-              formData.append(key, String(value));
-            }
-          }
-        });
-
-        requestData = formData;
-        // Let the browser set the correct Content-Type with boundary for FormData
-      } else {
-        // For non-file submissions, use JSON
-        requestData = formattedValues;
-        headers = {
-          'Content-Type': 'application/json',
-        };
       }
 
       if (editingItem) {
         const idField = selectedEndpoint.idField;
         if (!idField) {
-          throw new Error('ID field is not configured');
+          throw new Error(UI_CONSTANTS.ERROR_MESSAGES.ID_FIELD_NOT_CONFIGURED);
         }
         const itemId = editingItem[idField];
         if (!itemId) {
-          throw new Error('Item ID is missing');
+          throw new Error(UI_CONSTANTS.ERROR_MESSAGES.ITEM_ID_MISSING);
         }
-        await apiClient.patch(
-          `${selectedEndpoint.url}/${itemId}`,
-          requestData,
-          { headers }
-        );
+        await apiClient.patch(`${selectedEndpoint.url}/${itemId}`, formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        });
         api.success({
           message: UI_CONSTANTS.SUCCESS_MESSAGES.SUCCESS,
           description: UI_CONSTANTS.SUCCESS_MESSAGES.ITEM_UPDATED,
           duration: alertDuration,
         });
       } else {
-        await apiClient.post(selectedEndpoint.url, requestData, {
-          headers,
+        await apiClient.post(selectedEndpoint.url, formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
         });
         api.success({
           message: UI_CONSTANTS.SUCCESS_MESSAGES.SUCCESS,
@@ -937,7 +902,7 @@ export default function ItemCrud({
           : UI_CONSTANTS.ERROR_MESSAGES.UNKNOWN_ERROR;
       api.error({
         message: UI_CONSTANTS.ERROR_MESSAGES.ERROR,
-        description: UI_CONSTANTS.ERROR_MESSAGES.FAILED_TO_SAVE_ITEM,
+        description: `${UI_CONSTANTS.ERROR_MESSAGES.FAILED_TO_SAVE_ITEM} ${errorMessage}`,
         duration: alertDuration,
       });
     } finally {
@@ -1063,7 +1028,7 @@ export default function ItemCrud({
       );
     }
 
-    // Handle file and image uploads // TODO: Fix file management, support both upload to url and post as Formdata
+    // Handle file and image uploads
     if (field.isFile || field.isImage) {
       const currentValue = form.getFieldValue(field.key as NamePath);
       const uploadFileList: UploadFile[] = currentValue
@@ -1079,13 +1044,12 @@ export default function ItemCrud({
 
       const uploadProps = {
         name: field.key,
-        action: field.uploadUrl || `${selectedEndpoint?.url}/upload`,
         headers: {
           authorization: 'Bearer your-token',
         },
         onChange(info: UploadChangeParam) {
           if (info.file.status === 'uploading') {
-            // Just store the file in the form state without uploading
+            // Store the file in the form state
             form.setFieldValue(field.key as NamePath, info.file.originFileObj);
           } else if (info.file.status === 'done') {
             message.success(
@@ -1098,7 +1062,10 @@ export default function ItemCrud({
               `${info.file.name} ${UI_CONSTANTS.MODAL_MESSAGES.FILE_SELECT_FAILED}`
             );
           }
-          if (info.file.size / 1024 / 1024 > 0) {
+          if (
+            info.file.size &&
+            info.file.size / 1024 / 1024 > (field.maxSize || 0)
+          ) {
             message.error(
               `${UI_CONSTANTS.MODAL_MESSAGES.FILE_SIZE_ERROR} ${field.maxSize}MB!`
             );
@@ -1108,7 +1075,12 @@ export default function ItemCrud({
         accept: field.accept || (field.isImage ? 'image/*' : undefined),
         maxCount: UI_CONSTANTS.DEFAULTS.FIRST_PAGE,
         fileList: uploadFileList,
-        // Remove customRequest to prevent automatic upload
+        customRequest: (options: UploadRequestOption) => {
+          // This prevents the default upload behavior
+          setTimeout(() => {
+            options.onSuccess?.('ok');
+          }, 0);
+        },
       };
 
       return (
@@ -1125,7 +1097,9 @@ export default function ItemCrud({
                   <FileOutlined />
                 )) as ReactNode
               }>
-              {field.isImage ? 'Select Image' : 'Select File'}
+              {field.isImage
+                ? UI_CONSTANTS.BUTTON_TEXTS.SELECT_IMAGE
+                : UI_CONSTANTS.BUTTON_TEXTS.SELECT_FILE}
             </Button>
           </Upload>
         </Form.Item>
