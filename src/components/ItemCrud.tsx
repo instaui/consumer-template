@@ -192,7 +192,10 @@ const RelationField: React.FC<RelationFieldProps> = ({
         );
         setOptions(newOptions as { label: string; value: string }[]);
       } catch (error) {
-        message.error('Failed to load relation options', error.message);
+        message.error(
+          UI_CONSTANTS.MODAL_MESSAGES.FAILED_TO_LOAD_RELATION,
+          error.message
+        );
       } finally {
         setLoading(false);
       }
@@ -270,8 +273,8 @@ const FilterRow: React.FC<{
             {field.filterType === 'range' ? (
               <Space>
                 <InputNumber
-                  placeholder='Min'
-                  style={{ width: 100 }}
+                  placeholder={UI_CONSTANTS.FILTER_PLACEHOLDERS.MIN}
+                  style={{ width: UI_CONSTANTS.LAYOUT.FILTER_INPUT_WIDTH }}
                   value={localFilters[field.key]?.[0]}
                   onChange={(value) =>
                     handleFilterChange(
@@ -283,8 +286,8 @@ const FilterRow: React.FC<{
                   }
                 />
                 <InputNumber
-                  placeholder='Max'
-                  style={{ width: 100 }}
+                  placeholder={UI_CONSTANTS.FILTER_PLACEHOLDERS.MAX}
+                  style={{ width: UI_CONSTANTS.LAYOUT.FILTER_INPUT_WIDTH }}
                   value={localFilters[field.key]?.[1]}
                   onChange={(value) =>
                     handleFilterChange(
@@ -299,8 +302,8 @@ const FilterRow: React.FC<{
             ) : field.filterType === 'boolean' ? (
               <Select
                 allowClear
-                placeholder='Select'
-                style={{ width: 120 }}
+                placeholder={UI_CONSTANTS.FILTER_PLACEHOLDERS.SELECT}
+                style={{ width: UI_CONSTANTS.LAYOUT.FILTER_SELECT_WIDTH }}
                 value={localFilters[field.key]?.[0]}
                 onChange={(value) => handleFilterChange(field.key, value)}
                 options={[
@@ -311,16 +314,16 @@ const FilterRow: React.FC<{
             ) : field.type === 'select' ? (
               <Select
                 allowClear
-                placeholder='Select'
-                style={{ width: 120 }}
+                placeholder={UI_CONSTANTS.FILTER_PLACEHOLDERS.SELECT}
+                style={{ width: UI_CONSTANTS.LAYOUT.FILTER_SELECT_WIDTH }}
                 value={localFilters[field.key]?.[0]}
                 onChange={(value) => handleFilterChange(field.key, value)}
                 options={field.options}
               />
             ) : (
               <Input
-                placeholder={`Search ${field.label}`}
-                style={{ width: 150 }}
+                placeholder={`${UI_CONSTANTS.FILTER_PLACEHOLDERS.SEARCH} ${field.label}`}
+                style={{ width: UI_CONSTANTS.LAYOUT.FILTER_TEXT_WIDTH }}
                 value={localFilters[field.key]?.[0]}
                 onChange={(e) =>
                   handleFilterChange(field.key, e.target.value || null)
@@ -331,7 +334,11 @@ const FilterRow: React.FC<{
           </div>
         ))}
       </div>
-      <div style={{ marginLeft: 16, marginBottom: 8 }}>
+      <div
+        style={{
+          marginLeft: UI_CONSTANTS.STYLES.MARGIN.LEFT,
+          marginBottom: UI_CONSTANTS.STYLES.MARGIN.BOTTOM,
+        }}>
         <Button type='primary' onClick={applyFilters}>
           Apply Filters
         </Button>
@@ -683,8 +690,8 @@ export default function ItemCrud({
     const idField = selectedEndpoint?.idField;
     if (!idField) {
       api.error({
-        message: 'Error',
-        description: 'ID field is not configured',
+        message: UI_CONSTANTS.ERROR_MESSAGES.ERROR,
+        description: UI_CONSTANTS.ERROR_MESSAGES.ID_FIELD_NOT_CONFIGURED,
         duration: alertDuration,
       });
       return;
@@ -692,8 +699,8 @@ export default function ItemCrud({
     const itemId = record[idField];
     if (!itemId) {
       api.error({
-        message: 'Error',
-        description: 'Item ID is missing',
+        message: UI_CONSTANTS.ERROR_MESSAGES.ERROR,
+        description: UI_CONSTANTS.ERROR_MESSAGES.ITEM_ID_MISSING,
         duration: alertDuration,
       });
       return;
@@ -706,8 +713,8 @@ export default function ItemCrud({
     const idField = selectedEndpoint.idField;
     if (!idField) {
       api.error({
-        message: 'Error',
-        description: 'ID field is not configured',
+        message: UI_CONSTANTS.ERROR_MESSAGES.ERROR,
+        description: UI_CONSTANTS.ERROR_MESSAGES.ID_FIELD_NOT_CONFIGURED,
         duration: alertDuration,
       });
       return;
@@ -715,8 +722,8 @@ export default function ItemCrud({
     const itemId = item[idField];
     if (!itemId) {
       api.error({
-        message: 'Error',
-        description: 'Item ID is missing',
+        message: UI_CONSTANTS.ERROR_MESSAGES.ERROR,
+        description: UI_CONSTANTS.ERROR_MESSAGES.ITEM_ID_MISSING,
         duration: alertDuration,
       });
       return;
@@ -743,8 +750,8 @@ export default function ItemCrud({
     const idField = selectedEndpoint?.idField;
     if (!idField) {
       api.error({
-        message: 'Error',
-        description: 'ID field is not configured',
+        message: UI_CONSTANTS.ERROR_MESSAGES.ERROR,
+        description: UI_CONSTANTS.ERROR_MESSAGES.ID_FIELD_NOT_CONFIGURED,
         duration: alertDuration,
       });
       return;
@@ -801,7 +808,7 @@ export default function ItemCrud({
 
       const response = await apiClient.get(`${selectedEndpoint.url}/${itemId}`);
       const { data } = response.data;
-      const itemData = data || response.data;
+      const itemData = data.data || data;
 
       // Set the modal state based on the operation type
       setModalState({ type: operation, item: itemData });
@@ -819,10 +826,10 @@ export default function ItemCrud({
           ? err.message
           : UI_CONSTANTS.ERROR_MESSAGES.UNKNOWN_ERROR;
       api.error({
-        message: 'Error',
-        description: `Failed to fetch item: ${errorMessage}`,
+        message: UI_CONSTANTS.ERROR_MESSAGES.ERROR,
+        description: `${UI_CONSTANTS.ERROR_MESSAGES.FAILED_TO_FETCH_ITEM}${errorMessage}`,
         duration: alertDuration,
-        placement: 'topRight',
+        placement: UI_CONSTANTS.ERROR_MESSAGES.ERROR_PLACEMENT,
       });
       // Navigate back to the list view on error
       navigate(`/${entity}`);
@@ -906,8 +913,8 @@ export default function ItemCrud({
           { headers }
         );
         api.success({
-          message: 'Success',
-          description: 'Item updated successfully',
+          message: UI_CONSTANTS.SUCCESS_MESSAGES.SUCCESS,
+          description: UI_CONSTANTS.SUCCESS_MESSAGES.ITEM_UPDATED,
           duration: alertDuration,
         });
       } else {
@@ -915,8 +922,8 @@ export default function ItemCrud({
           headers,
         });
         api.success({
-          message: 'Success',
-          description: 'Item created successfully',
+          message: UI_CONSTANTS.SUCCESS_MESSAGES.SUCCESS,
+          description: UI_CONSTANTS.SUCCESS_MESSAGES.ITEM_CREATED,
           duration: alertDuration,
         });
       }
@@ -929,8 +936,8 @@ export default function ItemCrud({
           ? err.message
           : UI_CONSTANTS.ERROR_MESSAGES.UNKNOWN_ERROR;
       api.error({
-        message: 'Error',
-        description: `Failed to save item: ${errorMessage}`,
+        message: UI_CONSTANTS.ERROR_MESSAGES.ERROR,
+        description: UI_CONSTANTS.ERROR_MESSAGES.FAILED_TO_SAVE_ITEM,
         duration: alertDuration,
       });
     } finally {
@@ -952,8 +959,8 @@ export default function ItemCrud({
       setLoading(true);
       await apiClient.delete(`${selectedEndpoint.url}/${itemToDelete}`);
       api.success({
-        message: 'Success',
-        description: 'Item deleted successfully',
+        message: UI_CONSTANTS.SUCCESS_MESSAGES.SUCCESS,
+        description: UI_CONSTANTS.SUCCESS_MESSAGES.ITEM_DELETED,
         duration: alertDuration,
       });
       fetchItems();
@@ -963,8 +970,8 @@ export default function ItemCrud({
           ? err.message
           : UI_CONSTANTS.ERROR_MESSAGES.UNKNOWN_ERROR;
       api.error({
-        message: 'Error',
-        description: `Failed to delete item: ${errorMessage}`,
+        message: UI_CONSTANTS.ERROR_MESSAGES.ERROR,
+        description: UI_CONSTANTS.ERROR_MESSAGES.FAILED_TO_DELETE_ITEM,
         duration: alertDuration,
       });
     } finally {
@@ -1081,14 +1088,20 @@ export default function ItemCrud({
             // Just store the file in the form state without uploading
             form.setFieldValue(field.key as NamePath, info.file.originFileObj);
           } else if (info.file.status === 'done') {
-            message.success(`${info.file.name} file selected successfully`);
+            message.success(
+              `${info.file.name} ${UI_CONSTANTS.MODAL_MESSAGES.FILE_SELECT_SUCCESS}`
+            );
             // Set the file in the form
             form.setFieldValue(field.key as NamePath, info.file.originFileObj);
           } else if (info.file.status === 'error') {
-            message.error(`${info.file.name} file selection failed.`);
+            message.error(
+              `${info.file.name} ${UI_CONSTANTS.MODAL_MESSAGES.FILE_SELECT_FAILED}`
+            );
           }
           if (info.file.size / 1024 / 1024 > 0) {
-            message.error(`File must be smaller than ${field.maxSize}MB!`);
+            message.error(
+              `${UI_CONSTANTS.MODAL_MESSAGES.FILE_SIZE_ERROR} ${field.maxSize}MB!`
+            );
             return false;
           }
         },
@@ -1279,7 +1292,7 @@ export default function ItemCrud({
                     }: FilterDropdownProps) => (
                       <div style={{ padding: 8 }}>
                         <Input
-                          placeholder='Min'
+                          placeholder={UI_CONSTANTS.FILTER_PLACEHOLDERS.MIN}
                           value={selectedKeys[0] as string}
                           onChange={(e) =>
                             setSelectedKeys(
@@ -1293,10 +1306,13 @@ export default function ItemCrud({
                                 : []
                             )
                           }
-                          style={{ width: 100, marginRight: 8 }}
+                          style={{
+                            width: UI_CONSTANTS.LAYOUT.FILTER_INPUT_WIDTH,
+                            marginRight: UI_CONSTANTS.STYLES.MARGIN.RIGHT,
+                          }}
                         />
                         <Input
-                          placeholder='Max'
+                          placeholder={UI_CONSTANTS.FILTER_PLACEHOLDERS.MAX}
                           value={
                             selectedKeys[
                               UI_CONSTANTS.DEFAULTS.FIRST_PAGE
@@ -1305,13 +1321,18 @@ export default function ItemCrud({
                           onChange={(e) =>
                             setSelectedKeys([selectedKeys[0], e.target.value])
                           }
-                          style={{ width: 100 }}
+                          style={{
+                            width: UI_CONSTANTS.LAYOUT.FILTER_INPUT_WIDTH,
+                          }}
                         />
                         <Button
                           type='primary'
                           onClick={() => confirm()}
                           size='small'
-                          style={{ width: 90, marginRight: 8 }}>
+                          style={{
+                            width: UI_CONSTANTS.LAYOUT.FILTER_BUTTON_WIDTH,
+                            marginRight: UI_CONSTANTS.STYLES.MARGIN.RIGHT,
+                          }}>
                           Filter
                         </Button>
                         {clearFilters && (
@@ -1395,7 +1416,7 @@ export default function ItemCrud({
             };
           }),
         {
-          title: 'Actions',
+          title: UI_CONSTANTS.BUTTON_TEXTS.ACTIONS,
           key: 'actions',
           render: (_: unknown, record: Item) => {
             const { idField } = selectedEndpoint;
@@ -1408,13 +1429,13 @@ export default function ItemCrud({
                   type='primary'
                   icon={(<EditOutlined />) as ReactNode}
                   onClick={() => handleEdit(record)}>
-                  Edit
+                  {UI_CONSTANTS.BUTTON_TEXTS.EDIT}
                 </Button>
                 <Button
                   danger
                   icon={(<DeleteOutlined />) as ReactNode}
                   onClick={() => handleDelete(record[idField] as string)}>
-                  Delete
+                  {UI_CONSTANTS.BUTTON_TEXTS.DELETE}
                 </Button>
               </Space>
             );
@@ -1516,11 +1537,13 @@ export default function ItemCrud({
             <Button onClick={handleDetailModalClose}>
               {UI_CONSTANTS.BUTTON_TEXTS.CLOSE}
             </Button>
-            {selectedItem && selectedEndpoint && (
-              <Button type='primary' onClick={handleEditFromDetail}>
-                {UI_CONSTANTS.BUTTON_TEXTS.EDIT}
-              </Button>
-            )}
+            {selectedItem &&
+              selectedEndpoint &&
+              ((
+                <Button type='primary' onClick={handleEditFromDetail}>
+                  {UI_CONSTANTS.BUTTON_TEXTS.EDIT}
+                </Button>
+              ) as ReactNode)}
           </Space>
         </div>
       }>
@@ -1529,8 +1552,16 @@ export default function ItemCrud({
           {selectedEndpoint.fields.map((field) => {
             const value = selectedItem[field.key];
             return (
-              <div key={field.key} style={{ marginBottom: '16px' }}>
-                <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>
+              <div
+                key={field.key}
+                style={{
+                  marginBottom: UI_CONSTANTS.LAYOUT.DETAIL_FIELD_MARGIN,
+                }}>
+                <div
+                  style={{
+                    fontWeight: UI_CONSTANTS.LAYOUT.DETAIL_LABEL_FONT_WEIGHT,
+                    marginBottom: UI_CONSTANTS.LAYOUT.DETAIL_LABEL_MARGIN,
+                  }}>
                   {field.label}:
                 </div>
                 <div>{renderDetailValue(field, value)}</div>
@@ -1554,15 +1585,27 @@ export default function ItemCrud({
             {selectedEndpoint.fields.map((field) => {
               const value = selectedItem[field.key];
               return (
-                <div key={field.key} style={{ marginBottom: '16px' }}>
-                  <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>
+                <div
+                  key={field.key}
+                  style={{
+                    marginBottom: UI_CONSTANTS.LAYOUT.DETAIL_FIELD_MARGIN,
+                  }}>
+                  <div
+                    style={{
+                      fontWeight: UI_CONSTANTS.LAYOUT.DETAIL_LABEL_FONT_WEIGHT,
+                      marginBottom: UI_CONSTANTS.LAYOUT.DETAIL_LABEL_MARGIN,
+                    }}>
                     {field.label}:
                   </div>
                   <div>{renderDetailValue(field, value)}</div>
                 </div>
               );
             })}
-            <div style={{ marginTop: '16px', textAlign: 'right' }}>
+            <div
+              style={{
+                marginTop: UI_CONSTANTS.LAYOUT.DETAIL_ACTIONS_MARGIN,
+                textAlign: UI_CONSTANTS.LAYOUT.DETAIL_ACTIONS_ALIGN,
+              }}>
               <Space>
                 <Button onClick={handleDetailModalClose}>
                   {UI_CONSTANTS.BUTTON_TEXTS.CLOSE}
@@ -1615,8 +1658,8 @@ export default function ItemCrud({
           {selectedEndpoint?.fields
             .filter((field) =>
               editingItem
-                ? field.isPatchable || !field.isReadOnly
-                : field.isPostable || !field.isReadOnly
+                ? field.patchable || !field.readOnly
+                : field.postable || !field.readOnly
             )
             .map((field) => (
               <div key={field.key}>{renderFormField(field)}</div>
@@ -1644,8 +1687,8 @@ export default function ItemCrud({
           {selectedEndpoint?.fields
             .filter((field) =>
               editingItem
-                ? field.isPatchable || !field.isReadOnly
-                : field.isPostable || !field.isReadOnly
+                ? field.patchable || !field.readOnly
+                : field.postable || !field.readOnly
             )
             .map((field) => (
               <div key={field.key}>{renderFormField(field)}</div>
@@ -1773,8 +1816,14 @@ export default function ItemCrud({
           flexDirection: 'column',
         }}>
         <div
-          style={{ marginBottom: 16, display: 'flex', alignItems: 'center' }}>
-          <h1 style={{ margin: 0 }}>{selectedEndpoint?.label}</h1>
+          style={{
+            marginBottom: UI_CONSTANTS.LAYOUT.HEADER_MARGIN,
+            display: UI_CONSTANTS.STYLES.FLEX.DISPLAY,
+            alignItems: UI_CONSTANTS.STYLES.FLEX.ALIGN_CENTER,
+          }}>
+          <h1 style={{ margin: UI_CONSTANTS.LAYOUT.HEADER_TITLE_MARGIN }}>
+            {selectedEndpoint?.label}
+          </h1>
           <Button
             type='primary'
             onClick={() => handleAddNew()}
@@ -1814,7 +1863,10 @@ export default function ItemCrud({
               style: { cursor: 'pointer' },
             })}
             scroll={{ x: 'max-content', y: 'calc(100vh - 400px)' }}
-            style={{ flex: UI_CONSTANTS.DEFAULTS.FIRST_PAGE, minHeight: 0 }}
+            style={{
+              flex: UI_CONSTANTS.DEFAULTS.FIRST_PAGE,
+              minHeight: UI_CONSTANTS.LAYOUT.TABLE_MIN_HEIGHT,
+            }}
           />
         </div>
 
