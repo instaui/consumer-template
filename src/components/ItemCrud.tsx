@@ -1,46 +1,46 @@
 import {
-	Button,
-	Drawer,
-	Form,
-	Image,
-	Input,
-	InputNumber,
-	Layout,
-	Menu,
-	message,
-	Modal,
-	notification,
-	Row,
-	Select,
-	Space,
-	Spin,
-	Switch,
-	Table,
-	Upload,
+  Button,
+  Drawer,
+  Form,
+  Image,
+  Input,
+  InputNumber,
+  Layout,
+  Menu,
+  Modal,
+  Row,
+  Select,
+  Space,
+  Spin,
+  Switch,
+  Table,
+  Upload,
+  message,
+  notification,
 } from 'antd';
 import {
-	DeleteOutlined,
-	EditOutlined,
-	FileOutlined,
-	MenuFoldOutlined,
-	MenuUnfoldOutlined,
-	PictureOutlined,
+  DeleteOutlined,
+  EditOutlined,
+  FileOutlined,
+  MenuFoldOutlined,
+  MenuUnfoldOutlined,
+  PictureOutlined,
 } from '@ant-design/icons';
 import type {
-	FilterDropdownProps,
-	FilterValue,
-	SorterResult,
-	SortOrder,
-	TablePaginationConfig,
+  FilterDropdownProps,
+  FilterValue,
+  SortOrder,
+  SorterResult,
+  TablePaginationConfig,
 } from 'antd/es/table/interface';
-import type {FormInstance, Rule} from 'antd/es/form';
-import type {UploadChangeParam, UploadFile} from 'antd/es/upload/interface';
-import type {ReactNode} from 'react';
-import {useCallback, useEffect, useRef, useState} from 'react';
-import {useLocation, useNavigate, useParams} from 'react-router-dom';
+import type { FormInstance, Rule } from 'antd/es/form';
+import type { UploadChangeParam, UploadFile } from 'antd/es/upload/interface';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 
-import type {NamePath} from 'antd/es/form/interface'
-
+import type { NamePath } from 'antd/es/form/interface';
+import type { ReactNode } from 'react';
+import { UI_CONSTANTS } from '../constants';
 
 const { Sider } = Layout;
 
@@ -67,7 +67,7 @@ export interface FieldConfig {
   readOnly?: boolean;
   isFile?: boolean;
   isImage?: boolean;
-	uploadUrl?: string;
+  uploadUrl?: string;
   maxSize?: number;
   nullable?: boolean;
   patchable?: boolean;
@@ -83,7 +83,7 @@ export interface FieldConfig {
     entity: string;
     idField: string;
     keyColumns?: string[];
-		dropDownOptions?: (value:unknown) => {label: string; value: string};
+    dropDownOptions?: (value: unknown) => { label: string; value: string };
   };
   filterable?: boolean;
   filterType?: 'eq' | 'range' | 'boolean' | 'time-range' | 'date-range'; //TODO: Support time range and date range
@@ -96,8 +96,8 @@ export interface EndpointConfig {
   idField?: string;
   fields: FieldConfig[];
   validator: (values: Record<string, unknown>) => Record<string, string>;
-	renderDetail?: (...args: unknown[]) => ReactNode;
-	renderEdit?: (...args:unknown[]) => ReactNode;
+  renderDetail?: (...args: unknown[]) => ReactNode;
+  renderEdit?: (...args: unknown[]) => ReactNode;
 }
 
 interface Item {
@@ -105,35 +105,43 @@ interface Item {
 }
 
 interface BaseResponse {
-	status: string;
-	message: string;
+  status: string;
+  message: string;
 }
 
 interface ListResponse extends BaseResponse {
-	type: 'list';
-	data: Item[];
-	count?: number;
+  type: 'list';
+  data: Item[];
+  count?: number;
 }
 
 interface ItemResponse extends BaseResponse {
-	type: 'item';
-	data: Item;
+  type: 'item';
+  data: Item;
 }
 
 type APIResponse = ListResponse | ItemResponse;
 
 interface ApiClient {
-   get: (url: string, ...args:unknown[]) => Promise<APIResponse>;
-	post: (url: string, data?: unknown, ...args:unknown[]) => Promise<APIResponse>;
-	patch: (url: string, data?: unknown, ...args:unknown[]) => Promise<APIResponse>;
-	delete: (url: string,...args:unknown[]) => Promise<APIResponse>;
+  get: (url: string, ...args: unknown[]) => Promise<APIResponse>;
+  post: (
+    url: string,
+    data?: unknown,
+    ...args: unknown[]
+  ) => Promise<APIResponse>;
+  patch: (
+    url: string,
+    data?: unknown,
+    ...args: unknown[]
+  ) => Promise<APIResponse>;
+  delete: (url: string, ...args: unknown[]) => Promise<APIResponse>;
 }
 
 interface ItemCrudProps {
   apiClient: ApiClient;
   config: {
-	  alertDuration?: number;
-	  defaultPagesize?: number;
+    alertDuration?: number;
+    defaultPagesize?: number;
     endpoints: EndpointConfig[];
   };
   useDrawer?: boolean;
@@ -153,7 +161,7 @@ const RelationField: React.FC<RelationFieldProps> = ({
   rules,
   isDisabled,
   form,
-}):ReactNode => {
+}): ReactNode => {
   const [options, setOptions] = useState<{ label: string; value: string }[]>(
     []
   );
@@ -163,16 +171,25 @@ const RelationField: React.FC<RelationFieldProps> = ({
     const loadRelationOptions = async () => {
       try {
         setLoading(true);
-        const response = await apiClient.get(`/${field.relation!.entity}?cols=${field.relation!.keyColumns?.join(',')}`);
-        const items =  response.data as [];
-				// TODO: Handle paginated Response, Support server side filtering
-        const newOptions = items.map((item: Item)   => (field.relation?.dropDownOptions? field.relation.dropDownOptions(item) :{
-          label: field
-            .relation!.keyColumns?.map((col) => item[col])
-            .filter(Boolean)
-            .join(' - ').toString(),
-          value: item[field.relation!.idField],
-        }));
+        const response = await apiClient.get(
+          `/${field.relation!.entity}?cols=${field.relation!.keyColumns?.join(
+            ','
+          )}`
+        );
+        const items = response.data as [];
+        // TODO: Handle paginated Response, Support server side filtering
+        const newOptions = items.map((item: Item) =>
+          field.relation?.dropDownOptions
+            ? field.relation.dropDownOptions(item)
+            : {
+                label: field
+                  .relation!.keyColumns?.map((col) => item[col])
+                  .filter(Boolean)
+                  .join(' - ')
+                  .toString(),
+                value: item[field.relation!.idField],
+              }
+        );
         setOptions(newOptions as { label: string; value: string }[]);
       } catch (error) {
         message.error('Failed to load relation options', error.message);
@@ -193,7 +210,10 @@ const RelationField: React.FC<RelationFieldProps> = ({
         loading={loading}
         options={options}
         filterOption={(input, option) =>
-          (option?.label ?? '').toString().toLowerCase().includes(input.toLowerCase())
+          (option?.label ?? '')
+            .toString()
+            .toLowerCase()
+            .includes(input.toLowerCase())
         }
         onChange={(value) => {
           // Ensure we're setting just the uid value
@@ -316,20 +336,9 @@ const FilterRow: React.FC<{
           Apply Filters
         </Button>
       </div>
-    </Row> as ReactNode);
+    </Row>
+  ) as ReactNode;
 };
-
-const POSSIBLE_ID_FIELD_STRINGS = ['id', 'uid', 'uuid',  '_id'];
-const unknownErrorText = 'Unknown error occurred';
-const errorMessageString = 'Error';
-const errorDescriptionString = 'Failed to fetch items: '
-const pageString = 'page';
-const pageSizeString = 'pageSize';
-const sortKeyString = 'sort';
-const sortOrderString = 'order';
-const defaultAlertDuration = 5;
-const defaultFirstPage = 1;
-const defaultPageSize = 10;
 
 export default function ItemCrud({
   apiClient,
@@ -350,9 +359,9 @@ export default function ItemCrud({
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [selectedEndpoint, setSelectedEndpoint] =
     useState<EndpointConfig | null>(null);
-	const [pagination, setPagination] = useState({
-    current: defaultFirstPage,
-    pageSize: defaultPageSize,
+  const [pagination, setPagination] = useState({
+    current: UI_CONSTANTS.DEFAULTS.FIRST_PAGE,
+    pageSize: UI_CONSTANTS.DEFAULTS.PAGE_SIZE,
     total: 0,
   });
   const paginationRef = useRef(pagination);
@@ -386,8 +395,8 @@ export default function ItemCrud({
 
   // Request tracking
   const requestIdRef = useRef<number>(0);
-	const alertDuration = config.alertDuration ?? defaultAlertDuration
-	
+  const alertDuration =
+    config.alertDuration ?? UI_CONSTANTS.DEFAULTS.ALERT_DURATION;
 
   // Cleanup function to prevent memory leaks and state updates after unmount
   useEffect(() => {
@@ -396,8 +405,8 @@ export default function ItemCrud({
       isMountedRef.current = false;
     };
   }, []);
-	
-	const fetchItems = useCallback(async () => {
+
+  const fetchItems = useCallback(async () => {
     if (!selectedEndpoint) {
       return;
     }
@@ -408,30 +417,35 @@ export default function ItemCrud({
       setLoading(true);
 
       const searchParams = new URLSearchParams(location.search);
-      const response = await apiClient.get(selectedEndpoint.url, {
+      const response = (await apiClient.get(selectedEndpoint.url, {
         params: searchParams,
-      }) as ListResponse; // Only the list api is executed here.
+      })) as ListResponse;
 
-      // Only process the response if this is still the latest request
       if (!isMountedRef.current || currentRequestId !== requestIdRef.current) {
         return;
       }
-	    
-	    const { count, data} = response.data;
-			const total = count ?? data.length ?? 0;
-	    
-			
+
+      const { count, data } = response.data;
+      const total = count ?? data.length ?? 0;
 
       setPagination({
-        current: parseInt(searchParams.get(pageString) || '1', 10),
-        pageSize: parseInt(searchParams.get('pageSize')|| config.defaultPagesize?.toString() || '10', 10),
+        current: parseInt(
+          searchParams.get(UI_CONSTANTS.URL_PARAMS.PAGE) || '1',
+          10
+        ),
+        pageSize: parseInt(
+          searchParams.get(UI_CONSTANTS.URL_PARAMS.PAGE_SIZE) ||
+            config.defaultPagesize?.toString() ||
+            UI_CONSTANTS.DEFAULTS.PAGE_SIZE.toString(),
+          10
+        ),
         total: total,
       });
-			
+
       const processedItems = data.map((item: Item) => {
         const idField = selectedEndpoint.idField;
         if (idField && !item[idField]) {
-	        for (const field of POSSIBLE_ID_FIELD_STRINGS) {
+          for (const field of UI_CONSTANTS.ID_FIELDS.POSSIBLE_FIELDS) {
             if (item[field]) {
               item[idField] = item[field];
               break;
@@ -448,11 +462,13 @@ export default function ItemCrud({
       }
 
       const errorMessage =
-        err instanceof Error ? err.message : unknownErrorText;
+        err instanceof Error
+          ? err.message
+          : UI_CONSTANTS.ERROR_MESSAGES.UNKNOWN_ERROR;
       api.error({
-        message: errorMessageString,
-        description: `${errorDescriptionString} ${errorMessage}`,
-        duration: config.alertDuration || alertDuration,
+        message: UI_CONSTANTS.ERROR_MESSAGES.ERROR,
+        description: `${UI_CONSTANTS.ERROR_MESSAGES.FAILED_TO_FETCH_ITEMS} ${errorMessage}`,
+        duration: config.alertDuration || UI_CONSTANTS.DEFAULTS.ALERT_DURATION,
       });
     } finally {
       if (isMountedRef.current && currentRequestId === requestIdRef.current) {
@@ -470,19 +486,21 @@ export default function ItemCrud({
     const searchParams = new URLSearchParams(location.search);
 
     // Sync pagination
-    const page = searchParams.get(pageString);
-	  const pageSize = searchParams.get(pageSizeString);
+    const page = searchParams.get(UI_CONSTANTS.URL_PARAMS.PAGE);
+    const pageSize = searchParams.get(UI_CONSTANTS.URL_PARAMS.PAGE_SIZE);
     if (page || pageSize) {
       setPagination({
-        current: page ? parseInt(page, 10) : defaultFirstPage,
-        pageSize: pageSize ? parseInt(pageSize, 10) : defaultPageSize,
+        current: page ? parseInt(page, 10) : UI_CONSTANTS.DEFAULTS.FIRST_PAGE,
+        pageSize: pageSize
+          ? parseInt(pageSize, 10)
+          : UI_CONSTANTS.DEFAULTS.PAGE_SIZE,
         total: pagination.total,
       });
     }
 
     // Sync sorting
-	  const sort = searchParams.get(sortKeyString);
-	  const order = searchParams.get(sortOrderString);
+    const sort = searchParams.get(UI_CONSTANTS.URL_PARAMS.SORT);
+    const order = searchParams.get(UI_CONSTANTS.URL_PARAMS.ORDER);
     if (sort) {
       setSorting({
         field: sort,
@@ -493,7 +511,14 @@ export default function ItemCrud({
     // Sync filters
     const newFilters: Record<string, string[]> = {};
     searchParams.forEach((value, key) => {
-      if (![pageString, 'pageSize', 'sort', 'order'].includes(key)) {
+      if (
+        ![
+          UI_CONSTANTS.URL_PARAMS.PAGE,
+          UI_CONSTANTS.URL_PARAMS.PAGE_SIZE,
+          UI_CONSTANTS.URL_PARAMS.SORT,
+          UI_CONSTANTS.URL_PARAMS.ORDER,
+        ].includes(key)
+      ) {
         newFilters[key] = value.split(',');
       }
     });
@@ -544,12 +569,16 @@ export default function ItemCrud({
     }
 
     const searchParams = new URLSearchParams(location.search);
-    const page = searchParams.get(pageString);
-    const pageSize = searchParams.get('pageSize');
+    const page = searchParams.get(UI_CONSTANTS.URL_PARAMS.PAGE);
+    const pageSize = searchParams.get(UI_CONSTANTS.URL_PARAMS.PAGE_SIZE);
 
     if (page || pageSize) {
-      const newPage = page ? parseInt(page, 10) : defaultFirstPage;
-      const newPageSize = pageSize ? parseInt(pageSize, 10) : defaultPageSize;
+      const newPage = page
+        ? parseInt(page, 10)
+        : UI_CONSTANTS.DEFAULTS.FIRST_PAGE;
+      const newPageSize = pageSize
+        ? parseInt(pageSize, 10)
+        : UI_CONSTANTS.DEFAULTS.PAGE_SIZE;
 
       if (
         newPage !== pagination.current ||
@@ -589,9 +618,9 @@ export default function ItemCrud({
     });
 
     // Update pagination
-	  const {current, pageSize} = pagination;
-	  searchParams.set(pageString, String(current));
-    searchParams.set('pageSize', String(pageSize));
+    const { current, pageSize } = pagination;
+    searchParams.set(UI_CONSTANTS.URL_PARAMS.PAGE, String(current));
+    searchParams.set(UI_CONSTANTS.URL_PARAMS.PAGE_SIZE, String(pageSize));
 
     // Handle sorting
     if (Array.isArray(sorter)) {
@@ -600,11 +629,14 @@ export default function ItemCrud({
         const order = sorter[0].order;
 
         if (order) {
-          searchParams.set('sort', field);
-          searchParams.set('order', order === 'ascend' ? 'asc' : 'desc');
+          searchParams.set(UI_CONSTANTS.URL_PARAMS.SORT, field);
+          searchParams.set(
+            UI_CONSTANTS.URL_PARAMS.ORDER,
+            order === 'ascend' ? 'asc' : 'desc'
+          );
         } else {
-          searchParams.delete('sort');
-          searchParams.delete('order');
+          searchParams.delete(UI_CONSTANTS.URL_PARAMS.SORT);
+          searchParams.delete(UI_CONSTANTS.URL_PARAMS.ORDER);
         }
       }
     } else if (sorter.column) {
@@ -612,15 +644,18 @@ export default function ItemCrud({
       const order = sorter.order;
 
       if (order) {
-        searchParams.set('sort', field);
-        searchParams.set('order', order === 'ascend' ? 'asc' : 'desc');
+        searchParams.set(UI_CONSTANTS.URL_PARAMS.SORT, field);
+        searchParams.set(
+          UI_CONSTANTS.URL_PARAMS.ORDER,
+          order === 'ascend' ? 'asc' : 'desc'
+        );
       } else {
-        searchParams.delete('sort');
-        searchParams.delete('order');
+        searchParams.delete(UI_CONSTANTS.URL_PARAMS.SORT);
+        searchParams.delete(UI_CONSTANTS.URL_PARAMS.ORDER);
       }
     } else {
-      searchParams.delete('sort');
-      searchParams.delete('order');
+      searchParams.delete(UI_CONSTANTS.URL_PARAMS.SORT);
+      searchParams.delete(UI_CONSTANTS.URL_PARAMS.ORDER);
     }
 
     navigate(`${location.pathname}?${searchParams.toString()}`, {
@@ -765,8 +800,8 @@ export default function ItemCrud({
       }
 
       const response = await apiClient.get(`${selectedEndpoint.url}/${itemId}`);
-	    const {data} = response.data;
-	    const itemData = data || response.data;
+      const { data } = response.data;
+      const itemData = data || response.data;
 
       // Set the modal state based on the operation type
       setModalState({ type: operation, item: itemData });
@@ -780,7 +815,9 @@ export default function ItemCrud({
       }
     } catch (err) {
       const errorMessage =
-        err instanceof Error ? err.message : unknownErrorText;
+        err instanceof Error
+          ? err.message
+          : UI_CONSTANTS.ERROR_MESSAGES.UNKNOWN_ERROR;
       api.error({
         message: 'Error',
         description: `Failed to fetch item: ${errorMessage}`,
@@ -888,7 +925,9 @@ export default function ItemCrud({
       fetchItems();
     } catch (err) {
       const errorMessage =
-        err instanceof Error ? err.message : unknownErrorText;
+        err instanceof Error
+          ? err.message
+          : UI_CONSTANTS.ERROR_MESSAGES.UNKNOWN_ERROR;
       api.error({
         message: 'Error',
         description: `Failed to save item: ${errorMessage}`,
@@ -920,7 +959,9 @@ export default function ItemCrud({
       fetchItems();
     } catch (err) {
       const errorMessage =
-        err instanceof Error ? err.message : unknownErrorText;
+        err instanceof Error
+          ? err.message
+          : UI_CONSTANTS.ERROR_MESSAGES.UNKNOWN_ERROR;
       api.error({
         message: 'Error',
         description: `Failed to delete item: ${errorMessage}`,
@@ -933,53 +974,55 @@ export default function ItemCrud({
       setDeleteInput('');
     }
   };
-	
-	const renderValue = (value: unknown): string | number | boolean | null => {
-		if (value === null || value === undefined) {
-			return null;
-		}
-		
-		if (typeof value === 'object') {
-			// Handle relation objects that have an idField
-			if ('uid' in value) {
-				return (value as { uid: string }).uid;
-			}
-			return String(value);
-		}
-		
-		if (typeof value === 'string') {
-			// Handle string "true" / "false" and "1" / "0" as booleans
-			if (value === 'true' || value === '1') {
-				return true;
-			}
-			if (value === 'false' || value === '0') {
-				return false;
-			}
-			return value; // Return the string itself if it's not a boolean string
-		}
-		
-		if (typeof value === 'number') {
-			// Handle number 1 / 0 as booleans
-			if (value === 1) {
-				return true;
-			}
-			if (value === 0) {
-				return false;
-			}
-			return value; // Return the number itself if it's not a boolean representation
-		}
-		
-		if (typeof value === 'boolean') {
-			return value; // Return the boolean value itself
-		}
-		
-		return String(value); // Fallback for other types (like Date, Symbol, etc.)
-	};
-	
-	
-	const renderFormField = (field: FieldConfig) => {
+
+  const renderValue = (value: unknown): string | number | boolean | null => {
+    if (value === null || value === undefined) {
+      return null;
+    }
+
+    if (typeof value === 'object') {
+      // Handle relation objects that have an idField
+      if ('uid' in value) {
+        return (value as { uid: string }).uid;
+      }
+      return String(value);
+    }
+
+    if (typeof value === 'string') {
+      // Handle string "true" / "false" and "1" / "0" as booleans
+      if (value === 'true' || value === '1') {
+        return true;
+      }
+      if (value === 'false' || value === '0') {
+        return false;
+      }
+      return value; // Return the string itself if it's not a boolean string
+    }
+
+    if (typeof value === 'number') {
+      // Handle number 1 / 0 as booleans
+      if (value === 1) {
+        return true;
+      }
+      if (value === 0) {
+        return false;
+      }
+      return value; // Return the number itself if it's not a boolean representation
+    }
+
+    if (typeof value === 'boolean') {
+      return value; // Return the boolean value itself
+    }
+
+    return String(value); // Fallback for other types (like Date, Symbol, etc.)
+  };
+
+  const renderFormField = (field: FieldConfig) => {
     const rules: Rule[] = [
-      { required: field.required, message: `${field.label} is required` },
+      {
+        required: field.required,
+        message: `${field.label} ${UI_CONSTANTS.FORM_MESSAGES.REQUIRED_FIELD}`,
+      },
     ];
 
     if (field.validator) {
@@ -988,7 +1031,10 @@ export default function ItemCrud({
         validator: async (_: unknown, value: unknown) => {
           const validationResult = validatorFn(value);
           if (!validationResult.status) {
-            throw new Error(validationResult.message || 'Invalid value');
+            throw new Error(
+              validationResult.message ||
+                UI_CONSTANTS.FORM_MESSAGES.INVALID_VALUE
+            );
           }
         },
       });
@@ -1041,22 +1087,31 @@ export default function ItemCrud({
           } else if (info.file.status === 'error') {
             message.error(`${info.file.name} file selection failed.`);
           }
-	        if ( info.file.size / 1024 / 1024 > 0) {
-		        message.error(`File must be smaller than ${field.maxSize}MB!`);
-		        return false;
-	        }
+          if (info.file.size / 1024 / 1024 > 0) {
+            message.error(`File must be smaller than ${field.maxSize}MB!`);
+            return false;
+          }
         },
         accept: field.accept || (field.isImage ? 'image/*' : undefined),
-        maxCount: defaultFirstPage,
+        maxCount: UI_CONSTANTS.DEFAULTS.FIRST_PAGE,
         fileList: uploadFileList,
         // Remove customRequest to prevent automatic upload
       };
 
       return (
-        <Form.Item name={field.key as NamePath} label={field.label} rules={rules}>
+        <Form.Item
+          name={field.key as NamePath}
+          label={field.label}
+          rules={rules}>
           <Upload {...uploadProps}>
             <Button
-              icon={(field.isImage ? <PictureOutlined /> : <FileOutlined />) as ReactNode}>
+              icon={
+                (field.isImage ? (
+                  <PictureOutlined />
+                ) : (
+                  <FileOutlined />
+                )) as ReactNode
+              }>
               {field.isImage ? 'Select Image' : 'Select File'}
             </Button>
           </Upload>
@@ -1073,15 +1128,18 @@ export default function ItemCrud({
             valuePropName='checked'
             rules={rules}>
             <Switch
-              checkedChildren='Yes'
-              unCheckedChildren='No'
+              checkedChildren={UI_CONSTANTS.STATUS_TEXTS.YES}
+              unCheckedChildren={UI_CONSTANTS.STATUS_TEXTS.NO}
               disabled={isDisabled}
             />
           </Form.Item>
         );
       case 'url':
         return (
-          <Form.Item name={field.key as NamePath} label={field.label} rules={rules}>
+          <Form.Item
+            name={field.key as NamePath}
+            label={field.label}
+            rules={rules}>
             <Input
               type='url'
               placeholder={field.placeHolder}
@@ -1096,7 +1154,10 @@ export default function ItemCrud({
             label={field.label}
             rules={[
               ...rules,
-              { type: 'email', message: 'Please enter a valid email' },
+              {
+                type: 'email',
+                message: UI_CONSTANTS.FORM_MESSAGES.INVALID_EMAIL,
+              },
             ]}>
             <Input
               type='email'
@@ -1112,7 +1173,10 @@ export default function ItemCrud({
             label={field.label}
             rules={[
               ...rules,
-              { type: 'number', message: 'Please enter a valid number' },
+              {
+                type: 'number',
+                message: UI_CONSTANTS.FORM_MESSAGES.INVALID_NUMBER,
+              },
             ]}>
             <InputNumber
               placeholder={field.placeHolder}
@@ -1124,7 +1188,10 @@ export default function ItemCrud({
         );
       case 'textarea':
         return (
-          <Form.Item name={field.key as NamePath} label={field.label} rules={rules}>
+          <Form.Item
+            name={field.key as NamePath}
+            label={field.label}
+            rules={rules}>
             <Input.TextArea
               placeholder={field.placeHolder}
               disabled={isDisabled}
@@ -1134,37 +1201,48 @@ export default function ItemCrud({
         );
       case 'select':
         return (
-          <Form.Item name={field.key as NamePath} label={field.label} rules={rules}>
+          <Form.Item
+            name={field.key as NamePath}
+            label={field.label}
+            rules={rules}>
             <Select
               placeholder={field.placeHolder || `Select ${field.label}`}
               disabled={isDisabled}
               allowClear>
-              {field.options?.map((option) => (
-                <Select.Option key={option.value} value={option.value}>
-                  {option.label}
-                </Select.Option>
-              ) as ReactNode)}
+              {field.options?.map(
+                (option) =>
+                  (
+                    <Select.Option key={option.value} value={option.value}>
+                      {option.label}
+                    </Select.Option>
+                  ) as ReactNode
+              )}
             </Select>
           </Form.Item>
         );
       default:
         return (
-          <Form.Item name={field.key as NamePath} label={field.label} rules={rules}>
+          <Form.Item
+            name={field.key as NamePath}
+            label={field.label}
+            rules={rules}>
             <Input placeholder={field.placeHolder} disabled={isDisabled} />
           </Form.Item>
         );
     }
   };
 
-  const columns= selectedEndpoint
+  const columns = selectedEndpoint
     ? [
         ...selectedEndpoint.fields
           .filter((field) => field.showInList)
           .map((field) => {
             // Get current sort from URL
             const searchParams = new URLSearchParams(location.search);
-            const currentSort = searchParams.get('sort');
-            const currentOrder = searchParams.get('order');
+            const currentSort = searchParams.get(UI_CONSTANTS.URL_PARAMS.SORT);
+            const currentOrder = searchParams.get(
+              UI_CONSTANTS.URL_PARAMS.ORDER
+            );
 
             // Determine the sort order for this column
             let sortOrder: SortOrder | undefined = undefined;
@@ -1206,7 +1284,12 @@ export default function ItemCrud({
                           onChange={(e) =>
                             setSelectedKeys(
                               e.target.value
-                                ? [e.target.value, selectedKeys[defaultFirstPage]]
+                                ? [
+                                    e.target.value,
+                                    selectedKeys[
+                                      UI_CONSTANTS.DEFAULTS.FIRST_PAGE
+                                    ],
+                                  ]
                                 : []
                             )
                           }
@@ -1214,7 +1297,11 @@ export default function ItemCrud({
                         />
                         <Input
                           placeholder='Max'
-                          value={selectedKeys[defaultFirstPage] as string}
+                          value={
+                            selectedKeys[
+                              UI_CONSTANTS.DEFAULTS.FIRST_PAGE
+                            ] as string
+                          }
                           onChange={(e) =>
                             setSelectedKeys([selectedKeys[0], e.target.value])
                           }
@@ -1228,7 +1315,11 @@ export default function ItemCrud({
                           Filter
                         </Button>
                         {clearFilters && (
-                          <Button onClick={() => clearFilters ? clearFilters() :()=>{}} size='small'>
+                          <Button
+                            onClick={() =>
+                              clearFilters ? clearFilters() : () => {}
+                            }
+                            size='small'>
                             Reset
                           </Button>
                         )}
@@ -1273,7 +1364,7 @@ export default function ItemCrud({
                 if (field.isFile && value) {
                   return (
                     <Button
-                      icon={<FileOutlined /> as ReactNode}
+                      icon={(<FileOutlined />) as ReactNode}
                       size='small'
                       onClick={(e) => {
                         e.stopPropagation();
@@ -1307,7 +1398,7 @@ export default function ItemCrud({
           title: 'Actions',
           key: 'actions',
           render: (_: unknown, record: Item) => {
-	          const {idField} = selectedEndpoint;
+            const { idField } = selectedEndpoint;
             if (!idField) {
               return null;
             }
@@ -1315,13 +1406,13 @@ export default function ItemCrud({
               <Space>
                 <Button
                   type='primary'
-                  icon={<EditOutlined /> as ReactNode}
+                  icon={(<EditOutlined />) as ReactNode}
                   onClick={() => handleEdit(record)}>
                   Edit
                 </Button>
                 <Button
                   danger
-                  icon={<DeleteOutlined /> as ReactNode}
+                  icon={(<DeleteOutlined />) as ReactNode}
                   onClick={() => handleDelete(record[idField] as string)}>
                   Delete
                 </Button>
@@ -1334,7 +1425,7 @@ export default function ItemCrud({
 
   const DeleteConfirmationModal = (
     <Modal
-      title='Confirm Deletion'
+      title={UI_CONSTANTS.MODAL_TITLES.CONFIRM_DELETION}
       open={deleteModalVisible}
       onOk={handleDeleteConfirm}
       onCancel={() => {
@@ -1342,20 +1433,20 @@ export default function ItemCrud({
         setItemToDelete(null);
         setDeleteInput('');
       }}
-      okText='Delete'
+      okText={UI_CONSTANTS.BUTTON_TEXTS.DELETE}
       okType='danger'
       okButtonProps={{
         disabled: deleteInput !== 'DELETE',
       }}
-      cancelText='Cancel'>
+      cancelText={UI_CONSTANTS.BUTTON_TEXTS.CANCEL}>
       <div>
-        <p>Are you sure you want to delete this item?</p>
-        <p>This action cannot be undone.</p>
-        <p>Type "DELETE" to confirm:</p>
+        <p>{UI_CONSTANTS.MODAL_MESSAGES.DELETE_CONFIRMATION}</p>
+        <p>{UI_CONSTANTS.MODAL_MESSAGES.DELETE_WARNING}</p>
+        <p>{UI_CONSTANTS.MODAL_MESSAGES.DELETE_INPUT_PLACEHOLDER}</p>
         <Input
           value={deleteInput}
           onChange={(e) => setDeleteInput(e.target.value)}
-          placeholder='Type DELETE to confirm'
+          placeholder={UI_CONSTANTS.MODAL_MESSAGES.DELETE_INPUT_PLACEHOLDER}
         />
       </div>
     </Modal>
@@ -1390,7 +1481,7 @@ export default function ItemCrud({
     if (field.isFile && value) {
       return (
         <Button
-          icon={<FileOutlined /> as ReactNode}
+          icon={(<FileOutlined />) as ReactNode}
           onClick={() => window.open(String(value), '_blank')}>
           Download File
         </Button>
@@ -1414,20 +1505,22 @@ export default function ItemCrud({
 
   const DetailModal = useDrawer ? (
     <Drawer
-      title='Item Details'
+      title={UI_CONSTANTS.MODAL_TITLES.ITEM_DETAILS}
       open={detailModalVisible}
       onClose={handleDetailModalClose}
-      width={800}
+      width={UI_CONSTANTS.LAYOUT.DRAWER_WIDTH}
       placement='right'
       footer={
         <div style={{ textAlign: 'right' }}>
           <Space>
-            <Button onClick={handleDetailModalClose}>Close</Button>
+            <Button onClick={handleDetailModalClose}>
+              {UI_CONSTANTS.BUTTON_TEXTS.CLOSE}
+            </Button>
             {selectedItem && selectedEndpoint && (
               <Button type='primary' onClick={handleEditFromDetail}>
-                Edit
+                {UI_CONSTANTS.BUTTON_TEXTS.EDIT}
               </Button>
-            ) as ReactNode}
+            )}
           </Space>
         </div>
       }>
@@ -1449,43 +1542,51 @@ export default function ItemCrud({
     </Drawer>
   ) : (
     <Modal
-      title='Item Details'
+      title={UI_CONSTANTS.MODAL_TITLES.ITEM_DETAILS}
       open={detailModalVisible}
       onCancel={handleDetailModalClose}
       footer={null}
-      width={800}>
-      {selectedItem && selectedEndpoint && (
-        <div>
-          {selectedEndpoint.fields.map((field) => {
-            const value = selectedItem[field.key];
-            return (
-              <div key={field.key} style={{ marginBottom: '16px' }}>
-                <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>
-                  {field.label}:
+      width={UI_CONSTANTS.LAYOUT.MODAL_WIDTH}>
+      {selectedItem &&
+        selectedEndpoint &&
+        ((
+          <div>
+            {selectedEndpoint.fields.map((field) => {
+              const value = selectedItem[field.key];
+              return (
+                <div key={field.key} style={{ marginBottom: '16px' }}>
+                  <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>
+                    {field.label}:
+                  </div>
+                  <div>{renderDetailValue(field, value)}</div>
                 </div>
-                <div>{renderDetailValue(field, value)}</div>
-              </div>
-            );
-          })}
-          <div style={{ marginTop: '16px', textAlign: 'right' }}>
-            <Space>
-              <Button onClick={handleDetailModalClose}>Close</Button>
-              <Button type='primary' onClick={handleEditFromDetail}>
-                Edit
-              </Button>
-            </Space>
+              );
+            })}
+            <div style={{ marginTop: '16px', textAlign: 'right' }}>
+              <Space>
+                <Button onClick={handleDetailModalClose}>
+                  {UI_CONSTANTS.BUTTON_TEXTS.CLOSE}
+                </Button>
+                <Button type='primary' onClick={handleEditFromDetail}>
+                  {UI_CONSTANTS.BUTTON_TEXTS.EDIT}
+                </Button>
+              </Space>
+            </div>
           </div>
-        </div>
-      ) as ReactNode}
+        ) as ReactNode)}
     </Modal>
   );
 
   const EditModal = useDrawer ? (
     <Drawer
-      title={editingItem ? 'Edit Item' : 'Add New Item'}
+      title={
+        editingItem
+          ? UI_CONSTANTS.MODAL_TITLES.EDIT_ITEM
+          : UI_CONSTANTS.MODAL_TITLES.ADD_ITEM
+      }
       open={isModalVisible}
       onClose={handleModalClose}
-      width={600}
+      width={UI_CONSTANTS.LAYOUT.DRAWER_WIDTH}
       placement='right'
       footer={
         <div style={{ textAlign: 'right' }}>
@@ -1494,9 +1595,14 @@ export default function ItemCrud({
               type='primary'
               onClick={() => form.submit()}
               loading={loading}>
-              {editingItem ? 'Update' : 'Add'} Item
+              {editingItem
+                ? UI_CONSTANTS.BUTTON_TEXTS.UPDATE
+                : UI_CONSTANTS.BUTTON_TEXTS.ADD}{' '}
+              Item
             </Button>
-            <Button onClick={handleModalClose}>Cancel</Button>
+            <Button onClick={handleModalClose}>
+              {UI_CONSTANTS.BUTTON_TEXTS.CANCEL}
+            </Button>
           </Space>
         </div>
       }>
@@ -1520,11 +1626,15 @@ export default function ItemCrud({
     </Drawer>
   ) : (
     <Modal
-      title={editingItem ? 'Edit Item' : 'Add New Item'}
+      title={
+        editingItem
+          ? UI_CONSTANTS.MODAL_TITLES.EDIT_ITEM
+          : UI_CONSTANTS.MODAL_TITLES.ADD_ITEM
+      }
       open={isModalVisible}
       onCancel={handleModalClose}
       footer={null}
-      width={600}>
+      width={UI_CONSTANTS.LAYOUT.MODAL_WIDTH}>
       <Spin spinning={loading}>
         <Form
           form={form}
@@ -1543,9 +1653,14 @@ export default function ItemCrud({
           <Form.Item>
             <Space>
               <Button type='primary' htmlType='submit' loading={loading}>
-                {editingItem ? 'Update' : 'Add'} Item
+                {editingItem
+                  ? UI_CONSTANTS.BUTTON_TEXTS.UPDATE
+                  : UI_CONSTANTS.BUTTON_TEXTS.ADD}{' '}
+                Item
               </Button>
-              <Button onClick={handleModalClose}>Cancel</Button>
+              <Button onClick={handleModalClose}>
+                {UI_CONSTANTS.BUTTON_TEXTS.CANCEL}
+              </Button>
             </Space>
           </Form.Item>
         </Form>
@@ -1565,13 +1680,19 @@ export default function ItemCrud({
     const searchParams = new URLSearchParams(location.search);
 
     // Set pagination parameters
-    searchParams.set(pageString, '1');
-    searchParams.set('pageSize', String(pagination.pageSize));
+    searchParams.set(UI_CONSTANTS.URL_PARAMS.PAGE, '1');
+    searchParams.set(
+      UI_CONSTANTS.URL_PARAMS.PAGE_SIZE,
+      String(pagination.pageSize)
+    );
 
     // Set sorting parameters if they exist
     if (sorting.field) {
-      searchParams.set('sort', sorting.field);
-      searchParams.set('order', sorting.order === 'ascend' ? 'asc' : 'desc');
+      searchParams.set(UI_CONSTANTS.URL_PARAMS.SORT, sorting.field);
+      searchParams.set(
+        UI_CONSTANTS.URL_PARAMS.ORDER,
+        sorting.order === 'ascend' ? 'asc' : 'desc'
+      );
     }
 
     // Add new filter parameters
@@ -1580,7 +1701,10 @@ export default function ItemCrud({
         if (Array.isArray(value)) {
           if (value.length === 2) {
             searchParams.set(`${key}[min]`, String(value[0]));
-            searchParams.set(`${key}[max]`, String(value[defaultFirstPage]));
+            searchParams.set(
+              `${key}[max]`,
+              String(value[UI_CONSTANTS.DEFAULTS.FIRST_PAGE])
+            );
           } else {
             searchParams.set(key, value.map(String).join(','));
           }
@@ -1622,7 +1746,13 @@ export default function ItemCrud({
         />
         <Button
           type='text'
-          icon={(collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />)  as ReactNode}
+          icon={
+            (collapsed ? (
+              <MenuUnfoldOutlined />
+            ) : (
+              <MenuFoldOutlined />
+            )) as ReactNode
+          }
           onClick={() => setCollapsed(!collapsed)}
           style={{
             width: '100%',
@@ -1638,7 +1768,7 @@ export default function ItemCrud({
         style={{
           background: '#fff',
           padding: '24px',
-          flex: defaultFirstPage,
+          flex: UI_CONSTANTS.DEFAULTS.FIRST_PAGE,
           display: 'flex',
           flexDirection: 'column',
         }}>
@@ -1661,7 +1791,7 @@ export default function ItemCrud({
 
         <div
           style={{
-            flex: defaultFirstPage,
+            flex: UI_CONSTANTS.DEFAULTS.FIRST_PAGE,
             display: 'flex',
             flexDirection: 'column',
             minHeight: 0,
@@ -1684,7 +1814,7 @@ export default function ItemCrud({
               style: { cursor: 'pointer' },
             })}
             scroll={{ x: 'max-content', y: 'calc(100vh - 400px)' }}
-            style={{ flex: defaultFirstPage, minHeight: 0 }}
+            style={{ flex: UI_CONSTANTS.DEFAULTS.FIRST_PAGE, minHeight: 0 }}
           />
         </div>
 
