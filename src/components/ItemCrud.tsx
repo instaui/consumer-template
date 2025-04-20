@@ -1,47 +1,46 @@
 import {
-  Button,
-  Drawer,
-  Form,
-  Image,
-  Input,
-  InputNumber,
-  Layout,
-  Menu,
-  Modal,
-  Row,
-  Select,
-  Space,
-  Spin,
-  Switch,
-  Table,
-  Upload,
-  message,
-  notification,
+	Button,
+	Drawer,
+	Form,
+	Image,
+	Input,
+	InputNumber,
+	Layout,
+	Menu,
+	message,
+	Modal,
+	notification,
+	Row,
+	Select,
+	Space,
+	Spin,
+	Switch,
+	Table,
+	Upload,
 } from 'antd';
 import {
-  DeleteOutlined,
-  EditOutlined,
-  FileOutlined,
-  MenuFoldOutlined,
-  MenuUnfoldOutlined,
-  PictureOutlined,
+	DeleteOutlined,
+	EditOutlined,
+	FileOutlined,
+	MenuFoldOutlined,
+	MenuUnfoldOutlined,
+	PictureOutlined,
 } from '@ant-design/icons';
 import type {
-  FilterDropdownProps,
-  FilterValue,
-  SortOrder,
-  SorterResult,
-  TablePaginationConfig,
+	FilterDropdownProps,
+	FilterValue,
+	SorterResult,
+	SortOrder,
+	TablePaginationConfig,
 } from 'antd/es/table/interface';
-import type { FormInstance, Rule } from 'antd/es/form';
-import type { UploadChangeParam, UploadFile } from 'antd/es/upload/interface';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import type {FormInstance, Rule} from 'antd/es/form';
+import type {UploadChangeParam, UploadFile} from 'antd/es/upload/interface';
+import type {ReactNode} from 'react';
+import {useCallback, useEffect, useRef, useState} from 'react';
+import {useLocation, useNavigate, useParams} from 'react-router-dom';
 
-import { AxiosInstance } from 'axios';
-import type { ColumnsType } from 'antd/es/table';
-import type { RcFile } from 'antd/es/upload';
-import type { ReactNode } from 'react';
+import type {NamePath} from 'antd/es/form/interface'
+
 
 const { Sider } = Layout;
 
@@ -64,18 +63,17 @@ export interface FieldConfig {
     | 'url'
     | 'relation';
   options?: { label: string; value: string }[];
-  isId?: boolean;
-  isRequired?: boolean;
-  isReadOnly?: boolean;
+  required?: boolean;
+  readOnly?: boolean;
   isFile?: boolean;
   isImage?: boolean;
+	uploadUrl?: string;
   maxSize?: number;
-  uploadUrl?: string;
-  isNullable?: boolean;
-  isPatchable?: boolean;
-  isPutable?: boolean;
-  isPostable?: boolean;
-  shouldShowInListView?: boolean;
+  nullable?: boolean;
+  patchable?: boolean;
+  sortable?: boolean;
+  postable?: boolean;
+  showInList?: boolean;
   accept?: string;
   placeHolder?: string;
   validator?: (value: unknown) => ValidationResult;
@@ -84,10 +82,11 @@ export interface FieldConfig {
   relation?: {
     entity: string;
     idField: string;
-    keyColumns: string[];
+    keyColumns?: string[];
+		dropDownOptions?: (value:unknown) => {label: string; value: string};
   };
   filterable?: boolean;
-  filterType?: 'eq' | 'range' | 'boolean';
+  filterType?: 'eq' | 'range' | 'boolean' | 'time-range' | 'date-range'; //TODO: Support time range and date range
 }
 
 export interface EndpointConfig {
@@ -97,15 +96,44 @@ export interface EndpointConfig {
   idField?: string;
   fields: FieldConfig[];
   validator: (values: Record<string, unknown>) => Record<string, string>;
+	renderDetail?: (...args: unknown[]) => ReactNode;
+	renderEdit?: (...args:unknown[]) => ReactNode;
 }
 
 interface Item {
   [key: string]: unknown;
 }
 
+interface BaseResponse {
+	status: string;
+	message: string;
+}
+
+interface ListResponse extends BaseResponse {
+	type: 'list';
+	data: Item[];
+	count?: number;
+}
+
+interface ItemResponse extends BaseResponse {
+	type: 'item';
+	data: Item;
+}
+
+type APIResponse = ListResponse | ItemResponse;
+
+interface ApiClient {
+   get: (url: string, ...args:unknown[]) => Promise<APIResponse>;
+	post: (url: string, data?: unknown, ...args:unknown[]) => Promise<APIResponse>;
+	patch: (url: string, data?: unknown, ...args:unknown[]) => Promise<APIResponse>;
+	delete: (url: string,...args:unknown[]) => Promise<APIResponse>;
+}
+
 interface ItemCrudProps {
-  apiClient: AxiosInstance;
+  apiClient: ApiClient;
   config: {
+	  alertDuration?: number;
+	  defaultPagesize?: number;
     endpoints: EndpointConfig[];
   };
   useDrawer?: boolean;
@@ -113,7 +141,7 @@ interface ItemCrudProps {
 
 interface RelationFieldProps {
   field: FieldConfig;
-  apiClient: AxiosInstance;
+  apiClient: ApiClient;
   rules: Rule[];
   isDisabled: boolean;
   form: FormInstance;
@@ -125,7 +153,7 @@ const RelationField: React.FC<RelationFieldProps> = ({
   rules,
   isDisabled,
   form,
-}) => {
+}):ReactNode => {
   const [options, setOptions] = useState<{ label: string; value: string }[]>(
     []
   );
@@ -135,29 +163,29 @@ const RelationField: React.FC<RelationFieldProps> = ({
     const loadRelationOptions = async () => {
       try {
         setLoading(true);
-        const response = await apiClient.get(`/${field.relation!.entity}`);
-        const items = response.data.data || response.data;
-        const newOptions = items.map((item: Item) => ({
+        const response = await apiClient.get(`/${field.relation!.entity}?cols=${field.relation!.keyColumns?.join(',')}`);
+        const items =  response.data as [];
+				// TODO: Handle paginated Response, Support server side filtering
+        const newOptions = items.map((item: Item)   => (field.relation?.dropDownOptions? field.relation.dropDownOptions(item) :{
           label: field
-            .relation!.keyColumns.map((col) => item[col])
+            .relation!.keyColumns?.map((col) => item[col])
             .filter(Boolean)
-            .join(' - '),
+            .join(' - ').toString(),
           value: item[field.relation!.idField],
         }));
-        setOptions(newOptions);
+        setOptions(newOptions as { label: string; value: string }[]);
       } catch (error) {
-        console.error('Failed to load relation options:', error);
-        message.error('Failed to load relation options');
+        message.error('Failed to load relation options', error.message);
       } finally {
         setLoading(false);
       }
     };
 
-    loadRelationOptions();
+    loadRelationOptions().then(() => {});
   }, [field.relation, apiClient]);
 
   return (
-    <Form.Item name={field.key} label={field.label} rules={rules}>
+    <Form.Item name={field.key as NamePath} label={field.label} rules={rules}>
       <Select
         showSearch
         placeholder={field.placeHolder || `Select ${field.label}`}
@@ -165,22 +193,22 @@ const RelationField: React.FC<RelationFieldProps> = ({
         loading={loading}
         options={options}
         filterOption={(input, option) =>
-          (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+          (option?.label ?? '').toString().toLowerCase().includes(input.toLowerCase())
         }
         onChange={(value) => {
           // Ensure we're setting just the uid value
-          form.setFieldValue(field.key, value);
+          form.setFieldValue(field.key as NamePath, value);
         }}
       />
     </Form.Item>
-  );
+  ) as ReactNode;
 };
 
 const FilterRow: React.FC<{
   fields: FieldConfig[];
   onFilterChange: (filters: Record<string, string[]>) => void;
   currentFilters: Record<string, string[]>;
-}> = ({ fields, onFilterChange, currentFilters }) => {
+}> = ({ fields, onFilterChange, currentFilters }): React.ReactNode => {
   const [localFilters, setLocalFilters] =
     useState<Record<string, string[]>>(currentFilters);
 
@@ -212,15 +240,7 @@ const FilterRow: React.FC<{
   }
 
   return (
-    <Row
-      style={{
-        padding: '12px 24px',
-        background: '#fafafa',
-        borderBottom: '1px solid #f0f0f0',
-        display: 'flex',
-        flexWrap: 'wrap',
-        alignItems: 'flex-end',
-      }}>
+    <Row>
       <div style={{ display: 'flex', flexWrap: 'wrap', flex: 1 }}>
         {filterableFields.map((field) => (
           <div key={field.key} style={{ marginRight: 16, marginBottom: 8 }}>
@@ -296,9 +316,20 @@ const FilterRow: React.FC<{
           Apply Filters
         </Button>
       </div>
-    </Row>
-  );
+    </Row> as ReactNode);
 };
+
+const POSSIBLE_ID_FIELD_STRINGS = ['id', 'uid', 'uuid',  '_id'];
+const unknownErrorText = 'Unknown error occurred';
+const errorMessageString = 'Error';
+const errorDescriptionString = 'Failed to fetch items: '
+const pageString = 'page';
+const pageSizeString = 'pageSize';
+const sortKeyString = 'sort';
+const sortOrderString = 'order';
+const defaultAlertDuration = 5;
+const defaultFirstPage = 1;
+const defaultPageSize = 10;
 
 export default function ItemCrud({
   apiClient,
@@ -319,9 +350,9 @@ export default function ItemCrud({
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [selectedEndpoint, setSelectedEndpoint] =
     useState<EndpointConfig | null>(null);
-  const [pagination, setPagination] = useState({
-    current: 1,
-    pageSize: 10,
+	const [pagination, setPagination] = useState({
+    current: defaultFirstPage,
+    pageSize: defaultPageSize,
     total: 0,
   });
   const paginationRef = useRef(pagination);
@@ -351,20 +382,12 @@ export default function ItemCrud({
     order: 'ascend',
   });
   const [filters, setFilters] = useState<Record<string, string[]>>({});
-  const [isFetching, setIsFetching] = useState(false);
-  const fetchTimeoutRef = useRef<number | null>(null);
   const isMountedRef = useRef<boolean>(true);
-  const requestLockRef = useRef<boolean>(false);
-  const lastRequestTimeRef = useRef<number>(0);
-  const MIN_REQUEST_INTERVAL = 400;
-
-  // Request queue and debouncing mechanism
-  const requestQueueRef = useRef<(() => Promise<void>)[]>([]);
-  const isProcessingRef = useRef<boolean>(false);
 
   // Request tracking
   const requestIdRef = useRef<number>(0);
-  const lastRequestParamsRef = useRef<string>('');
+	const alertDuration = config.alertDuration ?? defaultAlertDuration
+	
 
   // Cleanup function to prevent memory leaks and state updates after unmount
   useEffect(() => {
@@ -373,8 +396,8 @@ export default function ItemCrud({
       isMountedRef.current = false;
     };
   }, []);
-
-  const fetchItems = useCallback(async () => {
+	
+	const fetchItems = useCallback(async () => {
     if (!selectedEndpoint) {
       return;
     }
@@ -382,34 +405,33 @@ export default function ItemCrud({
     const currentRequestId = ++requestIdRef.current;
 
     try {
-      setIsFetching(true);
       setLoading(true);
 
       const searchParams = new URLSearchParams(location.search);
       const response = await apiClient.get(selectedEndpoint.url, {
         params: searchParams,
-      });
+      }) as ListResponse; // Only the list api is executed here.
 
       // Only process the response if this is still the latest request
       if (!isMountedRef.current || currentRequestId !== requestIdRef.current) {
         return;
       }
-
-      const itemsData = response.data.data || response.data;
-      const total =
-        response.data.count || response.data.total || itemsData.length;
+	    
+	    const { count, data} = response.data;
+			const total = count ?? data.length ?? 0;
+	    
+			
 
       setPagination({
-        current: parseInt(searchParams.get('page') || '1', 10),
-        pageSize: parseInt(searchParams.get('pageSize') || '10', 10),
+        current: parseInt(searchParams.get(pageString) || '1', 10),
+        pageSize: parseInt(searchParams.get('pageSize')|| config.defaultPagesize?.toString() || '10', 10),
         total: total,
       });
-
-      const processedItems = itemsData.map((item: Item) => {
+			
+      const processedItems = data.map((item: Item) => {
         const idField = selectedEndpoint.idField;
         if (idField && !item[idField]) {
-          const possibleIdFields = ['id', 'uid', '_id'];
-          for (const field of possibleIdFields) {
+	        for (const field of POSSIBLE_ID_FIELD_STRINGS) {
             if (item[field]) {
               item[idField] = item[field];
               break;
@@ -426,17 +448,15 @@ export default function ItemCrud({
       }
 
       const errorMessage =
-        err instanceof Error ? err.message : 'Unknown error occurred';
+        err instanceof Error ? err.message : unknownErrorText;
       api.error({
-        message: 'Error',
-        description: `Failed to fetch items: ${errorMessage}`,
-        duration: 5,
-        placement: 'topRight',
+        message: errorMessageString,
+        description: `${errorDescriptionString} ${errorMessage}`,
+        duration: config.alertDuration || alertDuration,
       });
     } finally {
       if (isMountedRef.current && currentRequestId === requestIdRef.current) {
         setLoading(false);
-        setIsFetching(false);
       }
     }
   }, [selectedEndpoint, api, apiClient, location.search]);
@@ -450,19 +470,19 @@ export default function ItemCrud({
     const searchParams = new URLSearchParams(location.search);
 
     // Sync pagination
-    const page = searchParams.get('page');
-    const pageSize = searchParams.get('pageSize');
+    const page = searchParams.get(pageString);
+	  const pageSize = searchParams.get(pageSizeString);
     if (page || pageSize) {
       setPagination({
-        current: page ? parseInt(page, 10) : 1,
-        pageSize: pageSize ? parseInt(pageSize, 10) : 10,
+        current: page ? parseInt(page, 10) : defaultFirstPage,
+        pageSize: pageSize ? parseInt(pageSize, 10) : defaultPageSize,
         total: pagination.total,
       });
     }
 
     // Sync sorting
-    const sort = searchParams.get('sort');
-    const order = searchParams.get('order');
+	  const sort = searchParams.get(sortKeyString);
+	  const order = searchParams.get(sortOrderString);
     if (sort) {
       setSorting({
         field: sort,
@@ -473,7 +493,7 @@ export default function ItemCrud({
     // Sync filters
     const newFilters: Record<string, string[]> = {};
     searchParams.forEach((value, key) => {
-      if (!['page', 'pageSize', 'sort', 'order'].includes(key)) {
+      if (![pageString, 'pageSize', 'sort', 'order'].includes(key)) {
         newFilters[key] = value.split(',');
       }
     });
@@ -524,12 +544,12 @@ export default function ItemCrud({
     }
 
     const searchParams = new URLSearchParams(location.search);
-    const page = searchParams.get('page');
+    const page = searchParams.get(pageString);
     const pageSize = searchParams.get('pageSize');
 
     if (page || pageSize) {
-      const newPage = page ? parseInt(page, 10) : 1;
-      const newPageSize = pageSize ? parseInt(pageSize, 10) : 10;
+      const newPage = page ? parseInt(page, 10) : defaultFirstPage;
+      const newPageSize = pageSize ? parseInt(pageSize, 10) : defaultPageSize;
 
       if (
         newPage !== pagination.current ||
@@ -569,8 +589,9 @@ export default function ItemCrud({
     });
 
     // Update pagination
-    searchParams.set('page', String(pagination.current));
-    searchParams.set('pageSize', String(pagination.pageSize));
+	  const {current, pageSize} = pagination;
+	  searchParams.set(pageString, String(current));
+    searchParams.set('pageSize', String(pageSize));
 
     // Handle sorting
     if (Array.isArray(sorter)) {
@@ -629,8 +650,7 @@ export default function ItemCrud({
       api.error({
         message: 'Error',
         description: 'ID field is not configured',
-        duration: 5,
-        placement: 'topRight',
+        duration: alertDuration,
       });
       return;
     }
@@ -639,8 +659,7 @@ export default function ItemCrud({
       api.error({
         message: 'Error',
         description: 'Item ID is missing',
-        duration: 5,
-        placement: 'topRight',
+        duration: alertDuration,
       });
       return;
     }
@@ -654,8 +673,7 @@ export default function ItemCrud({
       api.error({
         message: 'Error',
         description: 'ID field is not configured',
-        duration: 5,
-        placement: 'topRight',
+        duration: alertDuration,
       });
       return;
     }
@@ -664,8 +682,7 @@ export default function ItemCrud({
       api.error({
         message: 'Error',
         description: 'Item ID is missing',
-        duration: 5,
-        placement: 'topRight',
+        duration: alertDuration,
       });
       return;
     }
@@ -693,8 +710,7 @@ export default function ItemCrud({
       api.error({
         message: 'Error',
         description: 'ID field is not configured',
-        duration: 5,
-        placement: 'topRight',
+        duration: alertDuration,
       });
       return;
     }
@@ -749,7 +765,8 @@ export default function ItemCrud({
       }
 
       const response = await apiClient.get(`${selectedEndpoint.url}/${itemId}`);
-      const itemData = response.data.data || response.data;
+	    const {data} = response.data;
+	    const itemData = data || response.data;
 
       // Set the modal state based on the operation type
       setModalState({ type: operation, item: itemData });
@@ -763,11 +780,11 @@ export default function ItemCrud({
       }
     } catch (err) {
       const errorMessage =
-        err instanceof Error ? err.message : 'Unknown error occurred';
+        err instanceof Error ? err.message : unknownErrorText;
       api.error({
         message: 'Error',
         description: `Failed to fetch item: ${errorMessage}`,
-        duration: 5,
+        duration: alertDuration,
         placement: 'topRight',
       });
       // Navigate back to the list view on error
@@ -854,8 +871,7 @@ export default function ItemCrud({
         api.success({
           message: 'Success',
           description: 'Item updated successfully',
-          duration: 5,
-          placement: 'topRight',
+          duration: alertDuration,
         });
       } else {
         await apiClient.post(selectedEndpoint.url, requestData, {
@@ -864,8 +880,7 @@ export default function ItemCrud({
         api.success({
           message: 'Success',
           description: 'Item created successfully',
-          duration: 5,
-          placement: 'topRight',
+          duration: alertDuration,
         });
       }
 
@@ -873,12 +888,11 @@ export default function ItemCrud({
       fetchItems();
     } catch (err) {
       const errorMessage =
-        err instanceof Error ? err.message : 'Unknown error occurred';
+        err instanceof Error ? err.message : unknownErrorText;
       api.error({
         message: 'Error',
         description: `Failed to save item: ${errorMessage}`,
-        duration: 5,
-        placement: 'topRight',
+        duration: alertDuration,
       });
     } finally {
       setLoading(false);
@@ -901,18 +915,16 @@ export default function ItemCrud({
       api.success({
         message: 'Success',
         description: 'Item deleted successfully',
-        duration: 5,
-        placement: 'topRight',
+        duration: alertDuration,
       });
       fetchItems();
     } catch (err) {
       const errorMessage =
-        err instanceof Error ? err.message : 'Unknown error occurred';
+        err instanceof Error ? err.message : unknownErrorText;
       api.error({
         message: 'Error',
         description: `Failed to delete item: ${errorMessage}`,
-        duration: 5,
-        placement: 'topRight',
+        duration: alertDuration,
       });
     } finally {
       setLoading(false);
@@ -921,31 +933,53 @@ export default function ItemCrud({
       setDeleteInput('');
     }
   };
-
-  const renderValue = (value: unknown): string | number | boolean | null => {
-    if (value === null || value === undefined) {
-      return null;
-    }
-    if (typeof value === 'object') {
-      // Handle relation objects that have an idField
-      if ('uid' in value) {
-        return (value as { uid: string }).uid;
-      }
-      return String(value);
-    }
-    if (
-      typeof value === 'string' ||
-      typeof value === 'number' ||
-      typeof value === 'boolean'
-    ) {
-      return value;
-    }
-    return String(value);
-  };
-
-  const renderFormField = (field: FieldConfig) => {
+	
+	const renderValue = (value: unknown): string | number | boolean | null => {
+		if (value === null || value === undefined) {
+			return null;
+		}
+		
+		if (typeof value === 'object') {
+			// Handle relation objects that have an idField
+			if ('uid' in value) {
+				return (value as { uid: string }).uid;
+			}
+			return String(value);
+		}
+		
+		if (typeof value === 'string') {
+			// Handle string "true" / "false" and "1" / "0" as booleans
+			if (value === 'true' || value === '1') {
+				return true;
+			}
+			if (value === 'false' || value === '0') {
+				return false;
+			}
+			return value; // Return the string itself if it's not a boolean string
+		}
+		
+		if (typeof value === 'number') {
+			// Handle number 1 / 0 as booleans
+			if (value === 1) {
+				return true;
+			}
+			if (value === 0) {
+				return false;
+			}
+			return value; // Return the number itself if it's not a boolean representation
+		}
+		
+		if (typeof value === 'boolean') {
+			return value; // Return the boolean value itself
+		}
+		
+		return String(value); // Fallback for other types (like Date, Symbol, etc.)
+	};
+	
+	
+	const renderFormField = (field: FieldConfig) => {
     const rules: Rule[] = [
-      { required: field.isRequired, message: `${field.label} is required` },
+      { required: field.required, message: `${field.label} is required` },
     ];
 
     if (field.validator) {
@@ -961,7 +995,7 @@ export default function ItemCrud({
     }
 
     // Only disable fields that are explicitly marked as read-only
-    const isDisabled = field.isReadOnly === true;
+    const isDisabled = field.readOnly === true;
 
     // Handle relations
     if (field.type === 'relation' && field.relation) {
@@ -976,9 +1010,9 @@ export default function ItemCrud({
       );
     }
 
-    // Handle file and image uploads
+    // Handle file and image uploads // TODO: Fix file management, support both upload to url and post as Formdata
     if (field.isFile || field.isImage) {
-      const currentValue = form.getFieldValue(field.key);
+      const currentValue = form.getFieldValue(field.key as NamePath);
       const uploadFileList: UploadFile[] = currentValue
         ? [
             {
@@ -999,35 +1033,30 @@ export default function ItemCrud({
         onChange(info: UploadChangeParam) {
           if (info.file.status === 'uploading') {
             // Just store the file in the form state without uploading
-            form.setFieldValue(field.key, info.file.originFileObj);
+            form.setFieldValue(field.key as NamePath, info.file.originFileObj);
           } else if (info.file.status === 'done') {
             message.success(`${info.file.name} file selected successfully`);
             // Set the file in the form
-            form.setFieldValue(field.key, info.file.originFileObj);
+            form.setFieldValue(field.key as NamePath, info.file.originFileObj);
           } else if (info.file.status === 'error') {
             message.error(`${info.file.name} file selection failed.`);
           }
-        },
-        beforeUpload(file: RcFile) {
-          // Check file size
-          if (field.maxSize && file.size / 1024 / 1024 > field.maxSize) {
-            message.error(`File must be smaller than ${field.maxSize}MB!`);
-            return false;
-          }
-          // Prevent automatic upload
-          return false;
+	        if ( info.file.size / 1024 / 1024 > 0) {
+		        message.error(`File must be smaller than ${field.maxSize}MB!`);
+		        return false;
+	        }
         },
         accept: field.accept || (field.isImage ? 'image/*' : undefined),
-        maxCount: 1,
+        maxCount: defaultFirstPage,
         fileList: uploadFileList,
         // Remove customRequest to prevent automatic upload
       };
 
       return (
-        <Form.Item name={field.key} label={field.label} rules={rules}>
+        <Form.Item name={field.key as NamePath} label={field.label} rules={rules}>
           <Upload {...uploadProps}>
             <Button
-              icon={field.isImage ? <PictureOutlined /> : <FileOutlined />}>
+              icon={(field.isImage ? <PictureOutlined /> : <FileOutlined />) as ReactNode}>
               {field.isImage ? 'Select Image' : 'Select File'}
             </Button>
           </Upload>
@@ -1039,7 +1068,7 @@ export default function ItemCrud({
       case 'boolean':
         return (
           <Form.Item
-            name={field.key}
+            name={field.key as NamePath}
             label={field.label}
             valuePropName='checked'
             rules={rules}>
@@ -1052,7 +1081,7 @@ export default function ItemCrud({
         );
       case 'url':
         return (
-          <Form.Item name={field.key} label={field.label} rules={rules}>
+          <Form.Item name={field.key as NamePath} label={field.label} rules={rules}>
             <Input
               type='url'
               placeholder={field.placeHolder}
@@ -1063,7 +1092,7 @@ export default function ItemCrud({
       case 'email':
         return (
           <Form.Item
-            name={field.key}
+            name={field.key as NamePath}
             label={field.label}
             rules={[
               ...rules,
@@ -1079,7 +1108,7 @@ export default function ItemCrud({
       case 'number':
         return (
           <Form.Item
-            name={field.key}
+            name={field.key as NamePath}
             label={field.label}
             rules={[
               ...rules,
@@ -1095,7 +1124,7 @@ export default function ItemCrud({
         );
       case 'textarea':
         return (
-          <Form.Item name={field.key} label={field.label} rules={rules}>
+          <Form.Item name={field.key as NamePath} label={field.label} rules={rules}>
             <Input.TextArea
               placeholder={field.placeHolder}
               disabled={isDisabled}
@@ -1105,7 +1134,7 @@ export default function ItemCrud({
         );
       case 'select':
         return (
-          <Form.Item name={field.key} label={field.label} rules={rules}>
+          <Form.Item name={field.key as NamePath} label={field.label} rules={rules}>
             <Select
               placeholder={field.placeHolder || `Select ${field.label}`}
               disabled={isDisabled}
@@ -1114,23 +1143,23 @@ export default function ItemCrud({
                 <Select.Option key={option.value} value={option.value}>
                   {option.label}
                 </Select.Option>
-              ))}
+              ) as ReactNode)}
             </Select>
           </Form.Item>
         );
       default:
         return (
-          <Form.Item name={field.key} label={field.label} rules={rules}>
+          <Form.Item name={field.key as NamePath} label={field.label} rules={rules}>
             <Input placeholder={field.placeHolder} disabled={isDisabled} />
           </Form.Item>
         );
     }
   };
 
-  const columns: ColumnsType<Item> = selectedEndpoint
+  const columns= selectedEndpoint
     ? [
         ...selectedEndpoint.fields
-          .filter((field) => field.shouldShowInListView)
+          .filter((field) => field.showInList)
           .map((field) => {
             // Get current sort from URL
             const searchParams = new URLSearchParams(location.search);
@@ -1147,13 +1176,13 @@ export default function ItemCrud({
               title: field.label,
               dataIndex: field.key,
               key: field.key,
-              sorter: true,
+              sorter: !!field.sortable,
               sortOrder: sortOrder,
               filters: field.filterable
                 ? field.filterType === 'boolean'
                   ? [
-                      { text: 'Yes', value: true },
-                      { text: 'No', value: false },
+                      { text: 'True', value: true },
+                      { text: 'False', value: false },
                     ]
                   : undefined
                 : undefined,
@@ -1177,7 +1206,7 @@ export default function ItemCrud({
                           onChange={(e) =>
                             setSelectedKeys(
                               e.target.value
-                                ? [e.target.value, selectedKeys[1]]
+                                ? [e.target.value, selectedKeys[defaultFirstPage]]
                                 : []
                             )
                           }
@@ -1185,7 +1214,7 @@ export default function ItemCrud({
                         />
                         <Input
                           placeholder='Max'
-                          value={selectedKeys[1] as string}
+                          value={selectedKeys[defaultFirstPage] as string}
                           onChange={(e) =>
                             setSelectedKeys([selectedKeys[0], e.target.value])
                           }
@@ -1199,7 +1228,7 @@ export default function ItemCrud({
                           Filter
                         </Button>
                         {clearFilters && (
-                          <Button onClick={() => clearFilters()} size='small'>
+                          <Button onClick={() => clearFilters ? clearFilters() :()=>{}} size='small'>
                             Reset
                           </Button>
                         )}
@@ -1215,20 +1244,20 @@ export default function ItemCrud({
 
                 if (field.type === 'relation' && field.relation && value) {
                   const idValue =
-                    typeof value === 'object' && 'uid' in value
+                    typeof value === 'object' && field.relation.idField in value
                       ? value.uid
                       : renderValue(value);
                   return (
                     <Button
                       type='link'
-                      onClick={(e) => {
-                        e.stopPropagation();
+                      onClick={() => {
+                        // e.stopPropagation();
                         // Use window.location.href to navigate without triggering React Router effects
                         window.location.href = `/${
                           field.relation!.entity
                         }/view/${idValue}`;
                       }}>
-                      View {field.label}
+                      View {field.label} {/* TODO: Introduce a render*/}
                     </Button>
                   );
                 }
@@ -1244,7 +1273,7 @@ export default function ItemCrud({
                 if (field.isFile && value) {
                   return (
                     <Button
-                      icon={<FileOutlined />}
+                      icon={<FileOutlined /> as ReactNode}
                       size='small'
                       onClick={(e) => {
                         e.stopPropagation();
@@ -1258,7 +1287,7 @@ export default function ItemCrud({
                 if (field.type === 'boolean') {
                   return (
                     <Switch
-                      checked={Boolean(renderValue(value))}
+                      checked={!!renderValue(value)}
                       checkedChildren='Yes'
                       unCheckedChildren='No'
                       disabled
@@ -1278,7 +1307,7 @@ export default function ItemCrud({
           title: 'Actions',
           key: 'actions',
           render: (_: unknown, record: Item) => {
-            const idField = selectedEndpoint.idField;
+	          const {idField} = selectedEndpoint;
             if (!idField) {
               return null;
             }
@@ -1286,13 +1315,13 @@ export default function ItemCrud({
               <Space>
                 <Button
                   type='primary'
-                  icon={<EditOutlined />}
+                  icon={<EditOutlined /> as ReactNode}
                   onClick={() => handleEdit(record)}>
                   Edit
                 </Button>
                 <Button
                   danger
-                  icon={<DeleteOutlined />}
+                  icon={<DeleteOutlined /> as ReactNode}
                   onClick={() => handleDelete(record[idField] as string)}>
                   Delete
                 </Button>
@@ -1361,7 +1390,7 @@ export default function ItemCrud({
     if (field.isFile && value) {
       return (
         <Button
-          icon={<FileOutlined />}
+          icon={<FileOutlined /> as ReactNode}
           onClick={() => window.open(String(value), '_blank')}>
           Download File
         </Button>
@@ -1398,7 +1427,7 @@ export default function ItemCrud({
               <Button type='primary' onClick={handleEditFromDetail}>
                 Edit
               </Button>
-            )}
+            ) as ReactNode}
           </Space>
         </div>
       }>
@@ -1447,7 +1476,7 @@ export default function ItemCrud({
             </Space>
           </div>
         </div>
-      )}
+      ) as ReactNode}
     </Modal>
   );
 
@@ -1480,7 +1509,7 @@ export default function ItemCrud({
           {selectedEndpoint?.fields
             .filter((field) =>
               editingItem
-                ? field.isPutable || field.isPatchable || !field.isReadOnly
+                ? field.isPatchable || !field.isReadOnly
                 : field.isPostable || !field.isReadOnly
             )
             .map((field) => (
@@ -1505,7 +1534,7 @@ export default function ItemCrud({
           {selectedEndpoint?.fields
             .filter((field) =>
               editingItem
-                ? field.isPutable || field.isPatchable || !field.isReadOnly
+                ? field.isPatchable || !field.isReadOnly
                 : field.isPostable || !field.isReadOnly
             )
             .map((field) => (
@@ -1536,7 +1565,7 @@ export default function ItemCrud({
     const searchParams = new URLSearchParams(location.search);
 
     // Set pagination parameters
-    searchParams.set('page', '1');
+    searchParams.set(pageString, '1');
     searchParams.set('pageSize', String(pagination.pageSize));
 
     // Set sorting parameters if they exist
@@ -1551,7 +1580,7 @@ export default function ItemCrud({
         if (Array.isArray(value)) {
           if (value.length === 2) {
             searchParams.set(`${key}[min]`, String(value[0]));
-            searchParams.set(`${key}[max]`, String(value[1]));
+            searchParams.set(`${key}[max]`, String(value[defaultFirstPage]));
           } else {
             searchParams.set(key, value.map(String).join(','));
           }
@@ -1593,7 +1622,7 @@ export default function ItemCrud({
         />
         <Button
           type='text'
-          icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+          icon={(collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />)  as ReactNode}
           onClick={() => setCollapsed(!collapsed)}
           style={{
             width: '100%',
@@ -1609,7 +1638,7 @@ export default function ItemCrud({
         style={{
           background: '#fff',
           padding: '24px',
-          flex: 1,
+          flex: defaultFirstPage,
           display: 'flex',
           flexDirection: 'column',
         }}>
@@ -1632,7 +1661,7 @@ export default function ItemCrud({
 
         <div
           style={{
-            flex: 1,
+            flex: defaultFirstPage,
             display: 'flex',
             flexDirection: 'column',
             minHeight: 0,
@@ -1655,13 +1684,13 @@ export default function ItemCrud({
               style: { cursor: 'pointer' },
             })}
             scroll={{ x: 'max-content', y: 'calc(100vh - 400px)' }}
-            style={{ flex: 1, minHeight: 0 }}
+            style={{ flex: defaultFirstPage, minHeight: 0 }}
           />
         </div>
 
-        {EditModal}
-        {DetailModal}
-        {DeleteConfirmationModal}
+        {EditModal as ReactNode}
+        {DetailModal as ReactNode}
+        {DeleteConfirmationModal as ReactNode}
       </Layout>
     </Layout>
   );
