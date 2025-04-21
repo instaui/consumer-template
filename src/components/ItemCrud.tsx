@@ -1,351 +1,52 @@
 import {
-  Button,
-  Drawer,
-  Form,
-  Image,
-  Input,
-  InputNumber,
-  Layout,
-  Menu,
-  Modal,
-  Row,
-  Select,
-  Space,
-  Spin,
-  Switch,
-  Table,
-  Upload,
-  message,
-  notification,
+	Button,
+	Drawer,
+	Form,
+	Image,
+	Input,
+	InputNumber,
+	Layout,
+	Menu,
+	message,
+	Modal,
+	notification,
+	Select,
+	Space,
+	Spin,
+	Switch,
+	Table,
+	Upload,
 } from 'antd';
 import {
-  DeleteOutlined,
-  EditOutlined,
-  FileOutlined,
-  MenuFoldOutlined,
-  MenuUnfoldOutlined,
-  PictureOutlined,
+	DeleteOutlined,
+	EditOutlined,
+	FileOutlined,
+	MenuFoldOutlined,
+	MenuUnfoldOutlined,
+	PictureOutlined,
 } from '@ant-design/icons';
 import type {
-  FilterDropdownProps,
-  FilterValue,
-  SortOrder,
-  SorterResult,
-  TablePaginationConfig,
+	FilterDropdownProps,
+	FilterValue,
+	SorterResult,
+	SortOrder,
+	TablePaginationConfig,
 } from 'antd/es/table/interface';
-import type { FormInstance, Rule } from 'antd/es/form';
-import type { UploadChangeParam, UploadFile } from 'antd/es/upload/interface';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import type {Rule} from 'antd/es/form';
+import type {UploadChangeParam, UploadFile} from 'antd/es/upload/interface';
+import type {ReactNode} from 'react';
+import React, {useCallback, useEffect, useRef, useState} from 'react';
+import {useLocation, useNavigate, useParams} from 'react-router-dom';
 
-import type { NamePath } from 'antd/es/form/interface';
-import type { ReactNode } from 'react';
-import { UI_CONSTANTS } from '../constants';
+import type {NamePath} from 'antd/es/form/interface';
+import {UI_CONSTANTS} from '../constants';
+import {EndpointConfig, FieldConfig, Item, ItemCrudProps} from "./types.ts";
+import {getRelationString} from "./GetRelationString.tsx";
+import {RelationField} from "./RelationField.tsx";
+import {FilterRow} from "./FilterRow.tsx";
 
 const { Sider } = Layout;
 
-interface ValidationResult {
-  status: boolean;
-  message?: string;
-}
-
-export interface FieldConfig {
-  key: string;
-  label: string;
-  type:
-    | 'text'
-    | 'textarea'
-    | 'number'
-    | 'email'
-    | 'select'
-    | 'date'
-    | 'boolean'
-    | 'url'
-    | 'relation';
-  options?: { label: string; value: string }[];
-  required?: boolean;
-  readOnly?: boolean;
-  isFile?: boolean;
-  isImage?: boolean;
-  uploadUrl?: string;
-  maxSize?: number;
-  nullable?: boolean;
-  patchable?: boolean;
-  sortable?: boolean;
-  postable?: boolean;
-  showInList?: boolean;
-  accept?: string;
-  placeHolder?: string;
-  validator?: (value: unknown) => ValidationResult;
-  renderInList?: (value: string | number | boolean | null) => ReactNode;
-  renderInDetail?: (value: string | number | boolean | null) => ReactNode;
-  relation?: {
-    entity: string;
-    idField: string;
-    keyColumns?: string[];
-    dropDownOptions?: (value: unknown) => { label: string; value: string };
-  };
-  filterable?: boolean;
-  filterType?: 'eq' | 'range' | 'boolean' | 'time-range' | 'date-range'; //TODO: Support time range and date range
-}
-
-export interface EndpointConfig {
-  key: string;
-  label: string;
-  url: string;
-  idField?: string;
-  fields: FieldConfig[];
-  validator: (values: Record<string, unknown>) => Record<string, string>;
-  renderDetail?: (...args: unknown[]) => ReactNode;
-  renderEdit?: (...args: unknown[]) => ReactNode;
-}
-
-interface Item {
-  [key: string]: unknown;
-}
-
-interface BaseResponse {
-  status: string;
-  message: string;
-}
-
-interface ListResponse extends BaseResponse {
-  type: 'list';
-  data: Item[];
-  count?: number;
-}
-
-interface ItemResponse extends BaseResponse {
-  type: 'item';
-  data: Item;
-}
-
-type APIResponse = ListResponse | ItemResponse;
-
-interface ApiClient {
-  get: (url: string, ...args: unknown[]) => Promise<APIResponse>;
-  post: (
-    url: string,
-    data?: unknown,
-    ...args: unknown[]
-  ) => Promise<APIResponse>;
-  patch: (
-    url: string,
-    data?: unknown,
-    ...args: unknown[]
-  ) => Promise<APIResponse>;
-  delete: (url: string, ...args: unknown[]) => Promise<APIResponse>;
-}
-
-interface ItemCrudProps {
-  apiClient: ApiClient;
-  config: {
-    alertDuration?: number;
-    defaultPagesize?: number;
-    endpoints: EndpointConfig[];
-  };
-  useDrawer?: boolean;
-}
-
-interface RelationFieldProps {
-  field: FieldConfig;
-  apiClient: ApiClient;
-  rules: Rule[];
-  isDisabled: boolean;
-  form: FormInstance;
-}
-
-const RelationField: React.FC<RelationFieldProps> = ({
-  field,
-  apiClient,
-  rules,
-  isDisabled,
-  form,
-}): ReactNode => {
-  const [options, setOptions] = useState<{ label: string; value: string }[]>(
-    []
-  );
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    const loadRelationOptions = async () => {
-      try {
-        setLoading(true);
-        const response = await apiClient.get(
-          `/${field.relation!.entity}?cols=${field.relation!.keyColumns?.join(
-            ','
-          )}`
-        );
-        const items = response.data as [];
-        // TODO: Handle paginated Response, Support server side filtering
-        const newOptions = items.map((item: Item) =>
-          field.relation?.dropDownOptions
-            ? field.relation.dropDownOptions(item)
-            : {
-                label: field
-                  .relation!.keyColumns?.map((col) => item[col])
-                  .filter(Boolean)
-                  .join(' - ')
-                  .toString(),
-                value: item[field.relation!.idField],
-              }
-        );
-        setOptions(newOptions as { label: string; value: string }[]);
-      } catch (error) {
-        message.error(
-          UI_CONSTANTS.MODAL_MESSAGES.FAILED_TO_LOAD_RELATION,
-          error.message
-        );
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadRelationOptions().then(() => {});
-  }, [field.relation, apiClient]);
-
-  return (
-    <Form.Item name={field.key as NamePath} label={field.label} rules={rules}>
-      <Select
-        showSearch
-        placeholder={field.placeHolder || `Select ${field.label}`}
-        disabled={isDisabled || loading}
-        loading={loading}
-        options={options}
-        filterOption={(input, option) =>
-          (option?.label ?? '')
-            .toString()
-            .toLowerCase()
-            .includes(input.toLowerCase())
-        }
-        onChange={(value) => {
-          // Ensure we're setting just the uid value
-          form.setFieldValue(field.key as NamePath, value);
-        }}
-      />
-    </Form.Item>
-  ) as ReactNode;
-};
-
-const FilterRow: React.FC<{
-  fields: FieldConfig[];
-  onFilterChange: (filters: Record<string, string[]>) => void;
-  currentFilters: Record<string, string[]>;
-}> = ({ fields, onFilterChange, currentFilters }): React.ReactNode => {
-  const [localFilters, setLocalFilters] =
-    useState<Record<string, string[]>>(currentFilters);
-
-  // Reset local filters when currentFilters change (e.g., when navigating between pages)
-  useEffect(() => {
-    setLocalFilters(currentFilters);
-  }, [currentFilters]);
-
-  const handleFilterChange = (key: string, value: string | string[] | null) => {
-    const newFilters = { ...localFilters };
-    if (value === null || (Array.isArray(value) && value.length === 0)) {
-      delete newFilters[key];
-    } else {
-      newFilters[key] = Array.isArray(value) ? value : [value];
-    }
-    setLocalFilters(newFilters);
-  };
-
-  const applyFilters = () => {
-    onFilterChange(localFilters);
-  };
-
-  // Filter out non-filterable fields
-  const filterableFields = fields.filter((field) => field.filterable);
-
-  // If there are no filterable fields, don't render the filter row
-  if (filterableFields.length === 0) {
-    return null;
-  }
-
-  return (
-    <Row>
-      <div style={{ display: 'flex', flexWrap: 'wrap', flex: 1 }}>
-        {filterableFields.map((field) => (
-          <div key={field.key} style={{ marginRight: 16, marginBottom: 8 }}>
-            <div style={{ marginBottom: 4, fontSize: 12, color: '#666' }}>
-              {field.label}
-            </div>
-            {field.filterType === 'range' ? (
-              <Space>
-                <InputNumber
-                  placeholder={UI_CONSTANTS.FILTER_PLACEHOLDERS.MIN}
-                  style={{ width: UI_CONSTANTS.LAYOUT.FILTER_INPUT_WIDTH }}
-                  value={localFilters[field.key]?.[0]}
-                  onChange={(value) =>
-                    handleFilterChange(
-                      field.key,
-                      value
-                        ? [String(value), localFilters[field.key]?.[1] || '']
-                        : null
-                    )
-                  }
-                />
-                <InputNumber
-                  placeholder={UI_CONSTANTS.FILTER_PLACEHOLDERS.MAX}
-                  style={{ width: UI_CONSTANTS.LAYOUT.FILTER_INPUT_WIDTH }}
-                  value={localFilters[field.key]?.[1]}
-                  onChange={(value) =>
-                    handleFilterChange(
-                      field.key,
-                      value
-                        ? [localFilters[field.key]?.[0] || '', String(value)]
-                        : null
-                    )
-                  }
-                />
-              </Space>
-            ) : field.filterType === 'boolean' ? (
-              <Select
-                allowClear
-                placeholder={UI_CONSTANTS.FILTER_PLACEHOLDERS.SELECT}
-                style={{ width: UI_CONSTANTS.LAYOUT.FILTER_SELECT_WIDTH }}
-                value={localFilters[field.key]?.[0]}
-                onChange={(value) => handleFilterChange(field.key, value)}
-                options={[
-                  { label: 'Yes', value: 'true' },
-                  { label: 'No', value: 'false' },
-                ]}
-              />
-            ) : field.type === 'select' ? (
-              <Select
-                allowClear
-                placeholder={UI_CONSTANTS.FILTER_PLACEHOLDERS.SELECT}
-                style={{ width: UI_CONSTANTS.LAYOUT.FILTER_SELECT_WIDTH }}
-                value={localFilters[field.key]?.[0]}
-                onChange={(value) => handleFilterChange(field.key, value)}
-                options={field.options}
-              />
-            ) : (
-              <Input
-                placeholder={`${UI_CONSTANTS.FILTER_PLACEHOLDERS.SEARCH} ${field.label}`}
-                style={{ width: UI_CONSTANTS.LAYOUT.FILTER_TEXT_WIDTH }}
-                value={localFilters[field.key]?.[0]}
-                onChange={(e) =>
-                  handleFilterChange(field.key, e.target.value || null)
-                }
-                allowClear
-              />
-            )}
-          </div>
-        ))}
-      </div>
-      <div
-        style={{
-          marginLeft: UI_CONSTANTS.STYLES.MARGIN.LEFT,
-          marginBottom: UI_CONSTANTS.STYLES.MARGIN.BOTTOM,
-        }}>
-        <Button type='primary' onClick={applyFilters}>
-          Apply Filters
-        </Button>
-      </div>
-    </Row>
-  ) as ReactNode;
-};
 
 export default function ItemCrud({
   apiClient,
@@ -367,8 +68,8 @@ export default function ItemCrud({
   const [selectedEndpoint, setSelectedEndpoint] =
     useState<EndpointConfig | null>(null);
   const [pagination, setPagination] = useState({
-    current: UI_CONSTANTS.DEFAULTS.FIRST_PAGE,
-    pageSize: UI_CONSTANTS.DEFAULTS.PAGE_SIZE,
+    current: UI_CONSTANTS.DEFAULTS.FIRST_PAGE as number,
+    pageSize: UI_CONSTANTS.DEFAULTS.PAGE_SIZE as number,
     total: 0,
   });
   const paginationRef = useRef(pagination);
@@ -426,7 +127,7 @@ export default function ItemCrud({
       const searchParams = new URLSearchParams(location.search);
       const response = (await apiClient.get(selectedEndpoint.url, {
         params: searchParams,
-      })) as ListResponse;
+      }));
 
       if (!isMountedRef.current || currentRequestId !== requestIdRef.current) {
         return;
@@ -436,16 +137,12 @@ export default function ItemCrud({
       const total = count ?? data.length ?? 0;
 
       setPagination({
-        current: parseInt(
-          searchParams.get(UI_CONSTANTS.URL_PARAMS.PAGE) || '1',
-          10
-        ),
-        pageSize: parseInt(
-          searchParams.get(UI_CONSTANTS.URL_PARAMS.PAGE_SIZE) ||
+        current:
+          parseInt(searchParams.get(UI_CONSTANTS.URL_PARAMS.PAGE) || '1'),
+        pageSize:
+          parseInt(searchParams.get(UI_CONSTANTS.URL_PARAMS.PAGE_SIZE) ||
             config.defaultPagesize?.toString() ||
-            UI_CONSTANTS.DEFAULTS.PAGE_SIZE.toString(),
-          10
-        ),
+            UI_CONSTANTS.DEFAULTS.PAGE_SIZE.toString()),
         total: total,
       });
 
@@ -518,16 +215,16 @@ export default function ItemCrud({
     // Sync filters
     const newFilters: Record<string, string[]> = {};
     searchParams.forEach((value, key) => {
-      if (
-        ![
-          UI_CONSTANTS.URL_PARAMS.PAGE,
-          UI_CONSTANTS.URL_PARAMS.PAGE_SIZE,
-          UI_CONSTANTS.URL_PARAMS.SORT,
-          UI_CONSTANTS.URL_PARAMS.ORDER,
-        ].includes(key)
-      ) {
-        newFilters[key] = value.split(',');
-      }
+	    const excludedKeys: string[] = [
+		    UI_CONSTANTS.URL_PARAMS.PAGE,
+		    UI_CONSTANTS.URL_PARAMS.PAGE_SIZE,
+		    UI_CONSTANTS.URL_PARAMS.SORT,
+		    UI_CONSTANTS.URL_PARAMS.ORDER,
+	    ];
+	    
+	    if (!excludedKeys.includes(key)) {
+		    newFilters[key] = value.split(',');
+	    }
     });
     setFilters(newFilters);
   }, [selectedEndpoint, location.search]);
@@ -554,12 +251,12 @@ export default function ItemCrud({
 
       // Handle specific item view/edit
       if (operation && id) {
-        fetchItemById(id);
+        fetchItemById(id).then();
         return;
       }
 
       // Handle list view
-      fetchItems();
+      fetchItems().then();
     };
 
     loadData();
@@ -808,17 +505,17 @@ export default function ItemCrud({
 
       const response = await apiClient.get(`${selectedEndpoint.url}/${itemId}`);
       const { data } = response.data;
-      const itemData = data.data || data;
+      
 
       // Set the modal state based on the operation type
-      setModalState({ type: operation, item: itemData });
+      setModalState({ type: operation, item: data as Item  });
 
       // Additional state updates based on operation
       if (operation === 'edit') {
-        setEditingItem(itemData);
-        form.setFieldsValue(itemData);
+        setEditingItem(data);
+        form.setFieldsValue(data);
       } else if (operation === 'view') {
-        setSelectedItem(itemData);
+        setSelectedItem(data);
       }
     } catch (err) {
       const errorMessage =
@@ -894,7 +591,7 @@ export default function ItemCrud({
       }
 
       handleModalClose();
-      fetchItems();
+      fetchItems().then();
     } catch (err) {
       const errorMessage =
         err instanceof Error
@@ -928,14 +625,14 @@ export default function ItemCrud({
         description: UI_CONSTANTS.SUCCESS_MESSAGES.ITEM_DELETED,
         duration: alertDuration,
       });
-      fetchItems();
+      fetchItems().then();
     } catch (err) {
       const errorMessage =
         err instanceof Error
           ? err.message
           : UI_CONSTANTS.ERROR_MESSAGES.UNKNOWN_ERROR;
       api.error({
-        message: UI_CONSTANTS.ERROR_MESSAGES.ERROR,
+        message: errorMessage,
         description: UI_CONSTANTS.ERROR_MESSAGES.FAILED_TO_DELETE_ITEM,
         duration: alertDuration,
       });
@@ -1329,21 +1026,22 @@ export default function ItemCrud({
                 }
 
                 if (field.type === 'relation' && field.relation && value) {
-                  const idValue =
-                    typeof value === 'object' && field.relation.idField in value
-                      ? value.uid
-                      : renderValue(value);
-                  return (
+	                const idValue =
+		                typeof value === 'object' && field.relation && field.relation.idField &&
+		                field.relation.idField in value
+			                ? (value as Record<string, unknown>)[field.relation.idField]
+			                : renderValue(value);
+	                
+	                
+	                return (
                     <Button
                       type='link'
                       onClick={() => {
-                        // e.stopPropagation();
-                        // Use window.location.href to navigate without triggering React Router effects
                         window.location.href = `/${
                           field.relation!.entity
                         }/view/${idValue}`;
                       }}>
-                      View {field.label} {/* TODO: Introduce a render*/}
+                       {getRelationString(field.relation, value as Item) as ReactNode}
                     </Button>
                   );
                 }
@@ -1464,7 +1162,7 @@ export default function ItemCrud({
             // Use window.location.href to navigate without triggering React Router effects
             window.location.href = `/${field.relation!.entity}/view/${idValue}`;
           }}>
-          View {field.label}
+	        {getRelationString(field.relation, value as Item) as ReactNode}
         </Button>
       );
     }
@@ -1825,11 +1523,7 @@ export default function ItemCrud({
             rowKey={(record) =>
               record[selectedEndpoint?.idField || 'id'] as string
             }
-            pagination={{
-              ...pagination,
-              position: ['bottomCenter'],
-              style: { marginBottom: 0 },
-            }}
+            pagination={pagination}
             loading={loading}
             onChange={handleTableChange}
             onRow={(record) => ({

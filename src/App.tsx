@@ -1,9 +1,9 @@
 import { App as AntApp, ConfigProvider } from 'antd';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 
-import type { EndpointConfig } from './components/ItemCrud';
 import ItemCrud from './components/ItemCrud';
 import axios from 'axios';
+import {EndpointConfig} from "./components/types.ts";
 
 // Helper functions for custom rendering
 const formatCurrency = (value: unknown): React.ReactNode => {
