@@ -1608,6 +1608,86 @@ export default function ItemCrud({
     });
   };
 
+  // If the selected endpoint has a custom component, render it instead of the default CRUD
+  if (selectedEndpoint?.customComponent) {
+    const CustomComponent = selectedEndpoint.customComponent;
+    return (
+      <Layout
+        style={{
+          minHeight: '100%',
+          background: 'transparent',
+          display: 'flex',
+          flexDirection: 'row',
+          height: '100%',
+        }}>
+        {contextHolder}
+        <Sider
+          trigger={null}
+          collapsible
+          collapsed={collapsed}
+          style={{ background: '#fff' }}>
+          <Menu
+            mode='inline'
+            selectedKeys={[entity || '']}
+            items={config.endpoints.map((endpoint) => ({
+              key: endpoint.key,
+              label: endpoint.label,
+              onClick: () => navigate(`/${endpoint.key}`),
+            }))}
+          />
+          <Button
+            type='text'
+            icon={
+              (collapsed ? (
+                <MenuUnfoldOutlined />
+              ) : (
+                <MenuFoldOutlined />
+              )) as ReactNode
+            }
+            onClick={() => setCollapsed(!collapsed)}
+            style={{
+              width: '100%',
+              borderRadius: 0,
+              position: 'absolute',
+              bottom: 0,
+              left: 0,
+              borderTop: '1px solid #f0f0f0',
+            }}
+          />
+        </Sider>
+        <Layout
+          style={{
+            background: '#fff',
+            padding: '24px',
+            flex: UI_CONSTANTS.DEFAULTS.FIRST_PAGE,
+            display: 'flex',
+            flexDirection: 'column',
+          }}>
+          {/* Render custom header if provided, otherwise render default header */}
+          {selectedEndpoint.header || (
+            <div
+              style={{
+                marginBottom: UI_CONSTANTS.LAYOUT.HEADER_MARGIN,
+                display: UI_CONSTANTS.STYLES.FLEX.DISPLAY,
+                alignItems: UI_CONSTANTS.STYLES.FLEX.ALIGN_CENTER,
+              }}>
+              <h1 style={{ margin: UI_CONSTANTS.LAYOUT.HEADER_TITLE_MARGIN }}>
+                {selectedEndpoint.label}
+              </h1>
+            </div>
+          )}
+
+          {/* Render the custom component without props */}
+          <CustomComponent />
+
+          {/* Render custom footer if provided */}
+          {selectedEndpoint.footer}
+        </Layout>
+      </Layout>
+    );
+  }
+
+  // Default CRUD rendering
   return (
     <Layout
       style={{
@@ -1660,22 +1740,25 @@ export default function ItemCrud({
           display: 'flex',
           flexDirection: 'column',
         }}>
-        <div
-          style={{
-            marginBottom: UI_CONSTANTS.LAYOUT.HEADER_MARGIN,
-            display: UI_CONSTANTS.STYLES.FLEX.DISPLAY,
-            alignItems: UI_CONSTANTS.STYLES.FLEX.ALIGN_CENTER,
-          }}>
-          <h1 style={{ margin: UI_CONSTANTS.LAYOUT.HEADER_TITLE_MARGIN }}>
-            {selectedEndpoint?.label}
-          </h1>
-          <Button
-            type='primary'
-            onClick={() => handleAddNew()}
-            style={{ marginLeft: 'auto' }}>
-            Add New {selectedEndpoint?.label}
-          </Button>
-        </div>
+        {/* Render custom header if provided, otherwise render default header */}
+        {selectedEndpoint?.header || (
+          <div
+            style={{
+              marginBottom: UI_CONSTANTS.LAYOUT.HEADER_MARGIN,
+              display: UI_CONSTANTS.STYLES.FLEX.DISPLAY,
+              alignItems: UI_CONSTANTS.STYLES.FLEX.ALIGN_CENTER,
+            }}>
+            <h1 style={{ margin: UI_CONSTANTS.LAYOUT.HEADER_TITLE_MARGIN }}>
+              {selectedEndpoint?.label}
+            </h1>
+            <Button
+              type='primary'
+              onClick={() => handleAddNew()}
+              style={{ marginLeft: 'auto' }}>
+              Add New {selectedEndpoint?.label}
+            </Button>
+          </div>
+        )}
 
         <FilterRow
           fields={selectedEndpoint?.fields || []}
@@ -1714,6 +1797,9 @@ export default function ItemCrud({
         {EditModal as ReactNode}
         {DetailModal as ReactNode}
         {DeleteConfirmationModal as ReactNode}
+
+        {/* Render custom footer if provided */}
+        {selectedEndpoint?.footer}
       </Layout>
     </Layout>
   );

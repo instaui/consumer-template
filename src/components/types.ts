@@ -67,6 +67,9 @@ export interface EndpointConfig {
   validator: (values: Record<string, unknown>) => Record<string, string>;
   renderDetail?: (...args: unknown[]) => ReactNode;
   renderEdit?: (...args: unknown[]) => ReactNode;
+  customComponent?: React.ComponentType<any>;
+  header?: React.ReactNode;
+  footer?: React.ReactNode;
 }
 
 interface BaseResponse {
