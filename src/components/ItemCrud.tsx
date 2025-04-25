@@ -39,7 +39,6 @@ import type { UploadChangeParam, UploadFile } from 'antd/es/upload/interface';
 import { formatDate, formatDateTime } from '../utils/dateFormat';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 
-import { FilterRow } from './FilterRow.tsx';
 import type { NamePath } from 'antd/es/form/interface';
 import type { ReactNode } from 'react';
 import { RelationField } from './RelationField.tsx';
@@ -255,6 +254,13 @@ export default function ItemCrud({
       // Handle entity change
       if (selectedEndpoint?.key !== entity) {
         setSelectedEndpoint(endpoint);
+        // Clear filters when changing endpoints
+        setFilters({});
+        // Update URL to remove filter parameters
+        const searchParams = new URLSearchParams();
+        searchParams.set(UI_CONSTANTS.URL_PARAMS.PAGE, String(UI_CONSTANTS.DEFAULTS.FIRST_PAGE));
+        searchParams.set(UI_CONSTANTS.URL_PARAMS.PAGE_SIZE, String(pagination.pageSize));
+        navigate(`/${entity}?${searchParams.toString()}`, { replace: true });
         return;
       }
 
@@ -1087,11 +1093,12 @@ export default function ItemCrud({
               key: field.key,
               sorter: !!field.sortable,
               sortOrder: sortOrder,
+              filtered: field.filterable ? !!filters[field.key] : undefined,
               filters: field.filterable
                 ? field.filterType === 'boolean'
                   ? [
-                      { text: 'True', value: true },
-                      { text: 'False', value: false },
+                      { text: 'Yes', value: 'true' },
+                      { text: 'No', value: 'false' },
                     ]
                   : undefined
                 : undefined,
@@ -1100,71 +1107,263 @@ export default function ItemCrud({
                   ? ('tree' as const)
                   : undefined,
               filterSearch: field.filterable && field.filterType === 'eq',
-              filterDropdown:
-                field.filterable && field.filterType === 'range'
-                  ? ({
-                      setSelectedKeys,
-                      selectedKeys,
-                      confirm,
-                      clearFilters,
-                    }: FilterDropdownProps) => (
-                      <div style={{ padding: 8 }}>
-                        <Input
-                          placeholder={UI_CONSTANTS.FILTER_PLACEHOLDERS.MIN}
-                          value={selectedKeys[0] as string}
-                          onChange={(e) =>
-                            setSelectedKeys(
-                              e.target.value
-                                ? [
-                                    e.target.value,
-                                    selectedKeys[
-                                      UI_CONSTANTS.DEFAULTS.FIRST_PAGE
-                                    ],
-                                  ]
-                                : []
-                            )
-                          }
-                          style={{
-                            width: UI_CONSTANTS.LAYOUT.FILTER_INPUT_WIDTH,
-                            marginRight: UI_CONSTANTS.STYLES.MARGIN.RIGHT,
-                          }}
-                        />
-                        <Input
-                          placeholder={UI_CONSTANTS.FILTER_PLACEHOLDERS.MAX}
-                          value={
-                            selectedKeys[
-                              UI_CONSTANTS.DEFAULTS.FIRST_PAGE
-                            ] as string
-                          }
-                          onChange={(e) =>
-                            setSelectedKeys([selectedKeys[0], e.target.value])
-                          }
-                          style={{
-                            width: UI_CONSTANTS.LAYOUT.FILTER_INPUT_WIDTH,
-                          }}
-                        />
-                        <Button
-                          type='primary'
-                          onClick={() => confirm()}
-                          size='small'
-                          style={{
-                            width: UI_CONSTANTS.LAYOUT.FILTER_BUTTON_WIDTH,
-                            marginRight: UI_CONSTANTS.STYLES.MARGIN.RIGHT,
-                          }}>
-                          Filter
-                        </Button>
-                        {clearFilters && (
-                          <Button
-                            onClick={() =>
-                              clearFilters ? clearFilters() : () => {}
+              filterDropdown: field.filterable
+                ? ({
+                    setSelectedKeys,
+                    selectedKeys,
+                    confirm,
+                    clearFilters,
+                  }: FilterDropdownProps) => {
+                    const handleKeyPress = (e: React.KeyboardEvent) => {
+                      if (e.key === 'Enter') {
+                        confirm();
+                      }
+                    };
+
+                    if (field.filterType === 'range') {
+                      return (
+                        <div style={{ padding: 8 }}>
+                          <Input
+                            placeholder={UI_CONSTANTS.FILTER_PLACEHOLDERS.MIN}
+                            value={selectedKeys[0] as string}
+                            onChange={(e) =>
+                              setSelectedKeys(
+                                e.target.value
+                                  ? [
+                                      e.target.value,
+                                      selectedKeys[
+                                        UI_CONSTANTS.DEFAULTS.FIRST_PAGE
+                                      ],
+                                    ]
+                                  : []
+                              )
                             }
-                            size='small'>
-                            Reset
-                          </Button>
-                        )}
-                      </div>
-                    )
-                  : undefined,
+                            onKeyPress={handleKeyPress}
+                            style={{
+                              width: UI_CONSTANTS.LAYOUT.FILTER_INPUT_WIDTH,
+                              marginRight: UI_CONSTANTS.STYLES.MARGIN.RIGHT,
+                              marginBottom: 8,
+                            }}
+                          />
+                          <Input
+                            placeholder={UI_CONSTANTS.FILTER_PLACEHOLDERS.MAX}
+                            value={
+                              selectedKeys[
+                                UI_CONSTANTS.DEFAULTS.FIRST_PAGE
+                              ] as string
+                            }
+                            onChange={(e) =>
+                              setSelectedKeys([selectedKeys[0], e.target.value])
+                            }
+                            onKeyPress={handleKeyPress}
+                            style={{
+                              width: UI_CONSTANTS.LAYOUT.FILTER_INPUT_WIDTH,
+                              marginBottom: 8,
+                            }}
+                          />
+                          <div>
+                            <Button
+                              type='primary'
+                              onClick={() => confirm()}
+                              size='small'
+                              style={{
+                                width: UI_CONSTANTS.LAYOUT.FILTER_BUTTON_WIDTH,
+                                marginRight: UI_CONSTANTS.STYLES.MARGIN.RIGHT,
+                              }}>
+                              Filter
+                            </Button>
+                            {clearFilters && (
+                              <Button
+                                onClick={() => {
+                                  if (clearFilters) {
+                                    clearFilters();
+                                    confirm();
+                                  }
+                                }}
+                                size='small'>
+                                Reset
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    } else if (field.filterType === 'boolean') {
+                      return (
+                        <div style={{ padding: 8 }}>
+                          <Select
+                            allowClear
+                            placeholder={UI_CONSTANTS.FILTER_PLACEHOLDERS.SELECT}
+                            style={{
+                              width: UI_CONSTANTS.LAYOUT.FILTER_SELECT_WIDTH,
+                              marginBottom: 8,
+                            }}
+                            value={selectedKeys[0] as string}
+                            onChange={(value) => {
+                              setSelectedKeys(value ? [value] : []);
+                              confirm();
+                            }}
+                            options={[
+                              { label: 'Yes', value: 'true' },
+                              { label: 'No', value: 'false' },
+                            ]}
+                          />
+                          <div>
+                            <Button
+                              type='primary'
+                              onClick={() => confirm()}
+                              size='small'
+                              style={{
+                                width: UI_CONSTANTS.LAYOUT.FILTER_BUTTON_WIDTH,
+                                marginRight: UI_CONSTANTS.STYLES.MARGIN.RIGHT,
+                              }}>
+                              Filter
+                            </Button>
+                            {clearFilters && (
+                              <Button
+                                onClick={() => {
+                                  if (clearFilters) {
+                                    clearFilters();
+                                    confirm();
+                                  }
+                                }}
+                                size='small'>
+                                Reset
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    } else if (field.type === 'select') {
+                      return (
+                        <div style={{ padding: 8 }}>
+                          <Select
+                            allowClear
+                            placeholder={UI_CONSTANTS.FILTER_PLACEHOLDERS.SELECT}
+                            style={{
+                              width: UI_CONSTANTS.LAYOUT.FILTER_SELECT_WIDTH,
+                              marginBottom: 8,
+                            }}
+                            value={selectedKeys[0] as string}
+                            onChange={(value) => {
+                              setSelectedKeys(value ? [value] : []);
+                              confirm();
+                            }}
+                            options={field.options}
+                          />
+                          <div>
+                            <Button
+                              type='primary'
+                              onClick={() => confirm()}
+                              size='small'
+                              style={{
+                                width: UI_CONSTANTS.LAYOUT.FILTER_BUTTON_WIDTH,
+                                marginRight: UI_CONSTANTS.STYLES.MARGIN.RIGHT,
+                              }}>
+                              Filter
+                            </Button>
+                            {clearFilters && (
+                              <Button
+                                onClick={() => {
+                                  if (clearFilters) {
+                                    clearFilters();
+                                    confirm();
+                                  }
+                                }}
+                                size='small'>
+                                Reset
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    } else if (field.type === 'date' || field.type === 'datetime') {
+                      return (
+                        <div style={{ padding: 8 }}>
+                          <DatePicker
+                            placeholder={UI_CONSTANTS.FILTER_PLACEHOLDERS.SELECT}
+                            style={{
+                              width: UI_CONSTANTS.LAYOUT.FILTER_SELECT_WIDTH,
+                              marginBottom: 8,
+                            }}
+                            value={selectedKeys[0] ? dayjs(selectedKeys[0] as string) : null}
+                            onChange={(date) => {
+                              setSelectedKeys(date ? [date.toISOString()] : []);
+                              confirm();
+                            }}
+                            showTime={field.type === 'datetime'}
+                          />
+                          <div>
+                            <Button
+                              type='primary'
+                              onClick={() => confirm()}
+                              size='small'
+                              style={{
+                                width: UI_CONSTANTS.LAYOUT.FILTER_BUTTON_WIDTH,
+                                marginRight: UI_CONSTANTS.STYLES.MARGIN.RIGHT,
+                              }}>
+                              Filter
+                            </Button>
+                            {clearFilters && (
+                              <Button
+                                onClick={() => {
+                                  if (clearFilters) {
+                                    clearFilters();
+                                    confirm();
+                                  }
+                                }}
+                                size='small'>
+                                Reset
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    } else {
+                      return (
+                        <div style={{ padding: 8 }}>
+                          <Input
+                            placeholder={`${UI_CONSTANTS.FILTER_PLACEHOLDERS.SEARCH} ${field.label}`}
+                            value={selectedKeys[0] as string}
+                            onChange={(e) => {
+                              setSelectedKeys(e.target.value ? [e.target.value] : []);
+                              if (!e.target.value) confirm();
+                            }}
+                            onKeyPress={handleKeyPress}
+                            style={{
+                              width: UI_CONSTANTS.LAYOUT.FILTER_TEXT_WIDTH,
+                              marginBottom: 8,
+                            }}
+                            allowClear
+                          />
+                          <div>
+                            <Button
+                              type='primary'
+                              onClick={() => confirm()}
+                              size='small'
+                              style={{
+                                width: UI_CONSTANTS.LAYOUT.FILTER_BUTTON_WIDTH,
+                                marginRight: UI_CONSTANTS.STYLES.MARGIN.RIGHT,
+                              }}>
+                              Filter
+                            </Button>
+                            {clearFilters && (
+                              <Button
+                                onClick={() => {
+                                  if (clearFilters) {
+                                    clearFilters();
+                                    confirm();
+                                  }
+                                }}
+                                size='small'>
+                                Reset
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    }
+                  }
+                : undefined,
               render: (value: unknown) => {
                 if (field.renderInList) {
                   return field.renderInList(
@@ -1562,51 +1761,6 @@ export default function ItemCrud({
     setIsModalVisible(true);
   };
 
-  // Add handleFilterChange function
-  const handleFilterChange = (newFilters: Record<string, string[]>) => {
-    // Create a new URLSearchParams from the current URL
-    const searchParams = new URLSearchParams(location.search);
-
-    // Set pagination parameters
-    searchParams.set(UI_CONSTANTS.URL_PARAMS.PAGE, '1');
-    searchParams.set(
-      UI_CONSTANTS.URL_PARAMS.PAGE_SIZE,
-      String(pagination.pageSize)
-    );
-
-    // Set sorting parameters if they exist
-    if (sorting.field) {
-      searchParams.set(UI_CONSTANTS.URL_PARAMS.SORT, sorting.field);
-      searchParams.set(
-        UI_CONSTANTS.URL_PARAMS.ORDER,
-        sorting.order === 'ascend' ? 'asc' : 'desc'
-      );
-    }
-
-    // Add new filter parameters
-    Object.entries(newFilters).forEach(([key, value]) => {
-      if (value && value.length > 0) {
-        if (Array.isArray(value)) {
-          if (value.length === 2) {
-            searchParams.set(`${key}[min]`, String(value[0]));
-            searchParams.set(
-              `${key}[max]`,
-              String(value[UI_CONSTANTS.DEFAULTS.FIRST_PAGE])
-            );
-          } else {
-            searchParams.set(key, value.map(String).join(','));
-          }
-        } else {
-          searchParams.set(key, String(value));
-        }
-      }
-    });
-
-    // Update the URL
-    navigate(`${location.pathname}?${searchParams.toString()}`, {
-      replace: true,
-    });
-  };
 
   // If the selected endpoint has a custom component, render it instead of the default CRUD
   if (selectedEndpoint?.customComponent) {
@@ -1760,11 +1914,6 @@ export default function ItemCrud({
           </div>
         )}
 
-        <FilterRow
-          fields={selectedEndpoint?.fields || []}
-          onFilterChange={handleFilterChange}
-          currentFilters={filters}
-        />
 
         <div
           style={{
@@ -1774,6 +1923,7 @@ export default function ItemCrud({
             minHeight: 0,
           }}>
           <Table
+            key={`table-${selectedEndpoint?.key}`}
             dataSource={items}
             columns={columns}
             rowKey={(record) =>
