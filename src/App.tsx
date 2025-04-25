@@ -159,7 +159,7 @@ function App() {
       label: 'Users',
       url: '/users',
       idField: 'uid',
-      // Use custom header and footer, but keep the default CRUD component
+      // Use custom header and footer but keep the default CRUD component
       header: <div style={{ padding: '16px', background: '#e6f7ff', borderRadius: '4px', marginBottom: '24px' }}>
         <Typography.Title level={2} style={{ margin: 0 }}>Users Management</Typography.Title>
         <Typography.Paragraph>
@@ -212,7 +212,7 @@ function App() {
           patchable: true,
           postable: true,
           filterable: true,
-          filterType: 'eq',
+          filterType: 'range',
         },
         {
           key: 'date2',
@@ -223,7 +223,7 @@ function App() {
           patchable: true,
           postable: true,
           filterable: true,
-          filterType: 'eq',
+          filterType: 'range',
           keepLocalTime: true,
         },
         {
@@ -373,8 +373,6 @@ function App() {
       label: 'Items',
       url: '/items',
       idField: 'uid',
-      // Use the custom component for this endpoint
-      customComponent: CustomItemsComponent,
       // Use the custom header
       header: <CustomHeader />,
       // Use the custom footer
@@ -480,6 +478,84 @@ function App() {
         return errors;
       },
     },
+	  {
+		  key: 'cards',
+		  label: 'Cards',
+		  url: '/cards',
+		  idField: 'uid',
+		  // Use the custom component for this endpoint
+		  customComponent: CustomItemsComponent,
+		  // Use the custom header
+		  header: <CustomHeader />,
+		  // Use the custom footer
+		  footer: <CustomFooter />,
+		  fields: [
+			  {
+				  key: 'uid',
+				  label: 'ID',
+				  type: 'text',
+				  required: true,
+				  readOnly: true,
+				  showInList: true,
+				  filterable: true,
+				  filterType: 'eq',
+			  },
+			  {
+				  key: 'name',
+				  label: 'Name',
+				  type: 'text',
+				  required: true,
+				  showInList: true,
+				  patchable: true,
+				  postable: true,
+				  filterable: true,
+				  filterType: 'eq',
+			  },
+			  {
+				  key: 'description',
+				  label: 'Description',
+				  type: 'textarea',
+				  required: true,
+				  showInList: true,
+				  patchable: true,
+				  postable: true,
+				  filterable: true,
+				  filterType: 'eq',
+			  },
+			  {
+				  key: 'price',
+				  label: 'Price',
+				  type: 'number',
+				  required: true,
+				  showInList: true,
+				  patchable: true,
+				  postable: true,
+				  renderInList: formatCurrency,
+				  renderInDetail: formatCurrency,
+				  filterable: true,
+				  filterType: 'range',
+			  },
+			  {
+				  key: 'status',
+				  label: 'Status',
+				  type: 'boolean',
+				  required: true,
+				  showInList: true,
+				  patchable: true,
+				  postable: true,
+				  filterable: true,
+				  sortable: true,
+				  filterType: 'boolean',
+			  },
+		  ],
+		  validator: (values) => {
+			  const errors: Record<string, string> = {};
+			  if (!values.name) errors.name = 'Name is required';
+			  if (!values.description) errors.description = 'Description is required';
+			  if (!values.price) errors.price = 'Price is required';
+			  return errors;
+		  },
+	  },
   ];
 
   return (

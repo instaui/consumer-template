@@ -1,7 +1,8 @@
 import {FieldConfig} from "./types.ts";
 import {type ReactNode, useEffect, useState} from "react";
-import {Button, Input, InputNumber, Row, Select, Space} from "antd";
+import {Button, DatePicker, Input, InputNumber, Row, Select, Space} from "antd";
 import {UI_CONSTANTS} from "../constants.ts";
+import dayjs from 'dayjs';
 
 export const FilterRow: React.FC<{
 	fields: FieldConfig[];
@@ -10,12 +11,12 @@ export const FilterRow: React.FC<{
 }> = ({fields, onFilterChange, currentFilters}): React.ReactNode => {
 	const [localFilters, setLocalFilters] =
 		useState<Record<string, string[]>>(currentFilters);
-	
+
 	// Reset local filters when currentFilters change (e.g., when navigating between pages)
 	useEffect(() => {
 		setLocalFilters(currentFilters);
 	}, [currentFilters]);
-	
+
 	const handleFilterChange = (key: string, value: string | string[] | null) => {
 		const newFilters = {...localFilters};
 		if (value === null || (Array.isArray(value) && value.length === 0)) {
@@ -25,19 +26,19 @@ export const FilterRow: React.FC<{
 		}
 		setLocalFilters(newFilters);
 	};
-	
+
 	const applyFilters = () => {
 		onFilterChange(localFilters);
 	};
-	
+
 	// Filter out non-filterable fields
 	const filterableFields = fields.filter((field) => field.filterable);
-	
+
 	// If there are no filterable fields, don't render the filter row
 	if (filterableFields.length === 0) {
 		return null;
 	}
-	
+
 	return (
 		<Row>
 			<div style={{display: 'flex', flexWrap: 'wrap', flex: 1}}>
@@ -46,7 +47,38 @@ export const FilterRow: React.FC<{
 						<div style={{marginBottom: 4, fontSize: 12, color: '#666'}}>
 							{field.label}
 						</div>
-						{field.filterType === 'range' ? (
+						{field.filterType === 'range' && (field.type === 'date' || field.type === 'datetime') ? (
+							<Space>
+								<DatePicker
+									placeholder={UI_CONSTANTS.FILTER_PLACEHOLDERS.MIN}
+									style={{width: UI_CONSTANTS.LAYOUT.FILTER_INPUT_WIDTH}}
+									value={localFilters[field.key]?.[0] ? dayjs(localFilters[field.key][0]) : null}
+									onChange={(date) =>
+										handleFilterChange(
+											field.key,
+											date
+												? [date.toISOString(), localFilters[field.key]?.[1] || '']
+												: null
+										)
+									}
+									showTime={field.type === 'datetime'}
+								/>
+								<DatePicker
+									placeholder={UI_CONSTANTS.FILTER_PLACEHOLDERS.MAX}
+									style={{width: UI_CONSTANTS.LAYOUT.FILTER_INPUT_WIDTH}}
+									value={localFilters[field.key]?.[1] ? dayjs(localFilters[field.key][1]) : null}
+									onChange={(date) =>
+										handleFilterChange(
+											field.key,
+											date
+												? [localFilters[field.key]?.[0] || '', date.toISOString()]
+												: null
+										)
+									}
+									showTime={field.type === 'datetime'}
+								/>
+							</Space>
+						) : field.filterType === 'range' ? (
 							<Space>
 								<InputNumber
 									placeholder={UI_CONSTANTS.FILTER_PLACEHOLDERS.MIN}
