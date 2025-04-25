@@ -1,118 +1,121 @@
-import type {FormInstance, Rule} from "antd/es/form";
-import type {ReactNode} from "react";
+import type { FormInstance, Rule } from 'antd/es/form';
+
+import type { ReactNode } from 'react';
 
 interface ValidationResult {
-	status: boolean;
-	message?: string;
+  status: boolean;
+  message?: string;
 }
 
 export interface Item {
-	[key: string]: unknown;
+  [key: string]: unknown;
 }
 
 export interface RelationConfig {
-	displayField?: string;
-	render?: (arg0: Item) => ReactNode;
-	entity: string;
-	idField: string;
-	keyColumns?: string[];
-	dropDownOptions?: (value: unknown) => { label: string; value: string };
+  displayField?: string;
+  render?: (arg0: Item) => ReactNode;
+  entity: string;
+  idField: string;
+  keyColumns?: string[];
+  dropDownOptions?: (value: unknown) => { label: string; value: string };
 }
 
 export interface FieldConfig {
-	key: string;
-	label: string;
-	type:
+  key: string;
+  label: string;
+  type:
 		| 'text'
 		| 'textarea'
-		| 'number'
-		| 'email'
-		| 'select'
-		| 'date'
-		| 'boolean'
-		| 'url'
-		| 'relation';
-	options?: { label: string; value: string }[];
-	required?: boolean;
-	readOnly?: boolean;
-	isFile?: boolean;
-	isImage?: boolean;
-	uploadUrl?: string;
-	maxSize?: number;
-	nullable?: boolean;
-	patchable?: boolean;
-	sortable?: boolean;
-	postable?: boolean;
-	showInList?: boolean;
-	accept?: string;
-	placeHolder?: string;
-	validator?: (value: unknown) => ValidationResult;
-	renderInList?: (value: string | number | boolean | null) => ReactNode;
-	renderInDetail?: (value: string | number | boolean | null) => ReactNode;
-	hideInDetail?: boolean;
-	relation?: RelationConfig;
-	filterable?: boolean;
-	filterType?: 'eq' | 'range' | 'boolean' | 'time-range' | 'date-range'; //TODO: Support time range and date range
+    | 'number'
+    | 'boolean'
+    | 'date'
+    | 'datetime'
+    | 'textarea'
+    | 'select'
+    | 'relation'
+    | 'url'
+    | 'email';
+  required?: boolean;
+  readOnly?: boolean;
+  placeHolder?: string;
+  options?: { label: string; value: string }[];
+  relation?: RelationConfig;
+  showInList?: boolean;
+  sortable?: boolean;
+  filterable?: boolean;
+  filterType?: 'eq' | 'range' | 'boolean';
+  renderInList?: (value: string | number | boolean | null) => React.ReactNode;
+  renderInDetail?: (value: string | number | boolean | null) => React.ReactNode;
+  validator?: (value: unknown) => { status: boolean; message?: string };
+  isFile?: boolean;
+  isImage?: boolean;
+  accept?: string;
+  maxSize?: number;
+  postable?: boolean;
+  patchable?: boolean;
+  // Date specific options
+  dateFormat?: string;
+  keepLocalTime?: boolean;
 }
 
 export interface EndpointConfig {
-	key: string;
-	label: string;
-	url: string;
-	idField?: string;
-	fields: FieldConfig[];
-	validator: (values: Record<string, unknown>) => Record<string, string>;
-	renderDetail?: (...args: unknown[]) => ReactNode;
-	renderEdit?: (...args: unknown[]) => ReactNode;
+  key: string;
+  label: string;
+  url: string;
+  idField?: string;
+  fields: FieldConfig[];
+  validator: (values: Record<string, unknown>) => Record<string, string>;
+  renderDetail?: (...args: unknown[]) => ReactNode;
+  renderEdit?: (...args: unknown[]) => ReactNode;
 }
 
 interface BaseResponse {
-	status: string;
-	message: string;
+  status: string;
+  message: string;
 }
 
-export interface ListResponse  {
-	data: Item[];
-	count?: number;
+export interface ListResponse {
+  data: Item[];
+  count?: number;
 }
 
 interface ItemResponse {
-	data: Item;
+  data: Item;
 }
 
-interface APIResponse extends BaseResponse{
-	data: ListResponse | ItemResponse;
+interface APIResponse extends BaseResponse {
+  data: ListResponse | ItemResponse;
 }
 
 interface ApiClient {
-	get: (url: string, ...args: unknown[]) => Promise<APIResponse>;
-	post: (
-		url: string,
-		data?: unknown,
-		...args: unknown[]
-	) => Promise<APIResponse>;
-	patch: (
-		url: string,
-		data?: unknown,
-		...args: unknown[]
-	) => Promise<APIResponse>;
-	delete: (url: string, ...args: unknown[]) => Promise<APIResponse>;
+  get: (url: string, ...args: unknown[]) => Promise<APIResponse>;
+  post: (
+    url: string,
+    data?: unknown,
+    ...args: unknown[]
+  ) => Promise<APIResponse>;
+  patch: (
+    url: string,
+    data?: unknown,
+    ...args: unknown[]
+  ) => Promise<APIResponse>;
+  delete: (url: string, ...args: unknown[]) => Promise<APIResponse>;
 }
 
 export interface ItemCrudProps {
-	apiClient: ApiClient;
-	config: {
-		alertDuration?: number;
-		defaultPagesize?: number;
-		endpoints: EndpointConfig[];
-	};
-	useDrawer?: boolean;
+  apiClient: ApiClient;
+  config: {
+    alertDuration?: number;
+    defaultPagesize?: number;
+    endpoints: EndpointConfig[];
+  };
+  useDrawer?: boolean;
 }
 
 export interface RelationFieldProps {
-	field: FieldConfig;
-	apiClient: ApiClient;
-	rules: Rule[];
-	isDisabled: boolean;
-	form: FormInstance;
+  field: FieldConfig;
+  apiClient: ApiClient;
+  rules: Rule[];
+  isDisabled: boolean;
+  form: FormInstance;
 }

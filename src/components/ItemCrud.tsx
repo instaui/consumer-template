@@ -1,52 +1,59 @@
 import {
-	Button,
-	Drawer,
-	Form,
-	Image,
-	Input,
-	InputNumber,
-	Layout,
-	Menu,
-	message,
-	Modal,
-	notification,
-	Select,
-	Space,
-	Spin,
-	Switch,
-	Table,
-	Upload,
+  Button,
+  DatePicker,
+  Drawer,
+  Form,
+  Image,
+  Input,
+  InputNumber,
+  Layout,
+  Menu,
+  Modal,
+  Select,
+  Space,
+  Spin,
+  Switch,
+  Table,
+  Upload,
+  message,
+  notification,
 } from 'antd';
 import {
-	DeleteOutlined,
-	EditOutlined,
-	FileOutlined,
-	MenuFoldOutlined,
-	MenuUnfoldOutlined,
-	PictureOutlined,
+  DeleteOutlined,
+  EditOutlined,
+  FileOutlined,
+  MenuFoldOutlined,
+  MenuUnfoldOutlined,
+  PictureOutlined,
 } from '@ant-design/icons';
+import { EndpointConfig, FieldConfig, Item, ItemCrudProps } from './types.ts';
 import type {
-	FilterDropdownProps,
-	FilterValue,
-	SorterResult,
-	SortOrder,
-	TablePaginationConfig,
+  FilterDropdownProps,
+  FilterValue,
+  SortOrder,
+  SorterResult,
+  TablePaginationConfig,
 } from 'antd/es/table/interface';
-import type {Rule} from 'antd/es/form';
-import type {UploadChangeParam, UploadFile} from 'antd/es/upload/interface';
-import type {ReactNode} from 'react';
-import React, {useCallback, useEffect, useRef, useState} from 'react';
-import {useLocation, useNavigate, useParams} from 'react-router-dom';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import type { UploadChangeParam, UploadFile } from 'antd/es/upload/interface';
+import { formatDate, formatDateTime } from '../utils/dateFormat';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 
-import type {NamePath} from 'antd/es/form/interface';
-import {UI_CONSTANTS} from '../constants';
-import {EndpointConfig, FieldConfig, Item, ItemCrudProps} from "./types.ts";
-import {getRelationString} from "./GetRelationString.tsx";
-import {RelationField} from "./RelationField.tsx";
-import {FilterRow} from "./FilterRow.tsx";
+import { FilterRow } from './FilterRow.tsx';
+import type { NamePath } from 'antd/es/form/interface';
+import type { ReactNode } from 'react';
+import { RelationField } from './RelationField.tsx';
+import type { Rule } from 'antd/es/form';
+import { UI_CONSTANTS } from '../constants';
+import dayjs from 'dayjs';
+import { getRelationString } from './GetRelationString.tsx';
+import timezone from 'dayjs/plugin/timezone';
+import utc from 'dayjs/plugin/utc';
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
 
 const { Sider } = Layout;
-
 
 export default function ItemCrud({
   apiClient,
@@ -125,9 +132,9 @@ export default function ItemCrud({
       setLoading(true);
 
       const searchParams = new URLSearchParams(location.search);
-      const response = (await apiClient.get(selectedEndpoint.url, {
+      const response = await apiClient.get(selectedEndpoint.url, {
         params: searchParams,
-      }));
+      });
 
       if (!isMountedRef.current || currentRequestId !== requestIdRef.current) {
         return;
@@ -137,12 +144,14 @@ export default function ItemCrud({
       const total = count ?? data.length ?? 0;
 
       setPagination({
-        current:
-          parseInt(searchParams.get(UI_CONSTANTS.URL_PARAMS.PAGE) || '1'),
-        pageSize:
-          parseInt(searchParams.get(UI_CONSTANTS.URL_PARAMS.PAGE_SIZE) ||
+        current: parseInt(
+          searchParams.get(UI_CONSTANTS.URL_PARAMS.PAGE) || '1'
+        ),
+        pageSize: parseInt(
+          searchParams.get(UI_CONSTANTS.URL_PARAMS.PAGE_SIZE) ||
             config.defaultPagesize?.toString() ||
-            UI_CONSTANTS.DEFAULTS.PAGE_SIZE.toString()),
+            UI_CONSTANTS.DEFAULTS.PAGE_SIZE.toString()
+        ),
         total: total,
       });
 
@@ -215,16 +224,16 @@ export default function ItemCrud({
     // Sync filters
     const newFilters: Record<string, string[]> = {};
     searchParams.forEach((value, key) => {
-	    const excludedKeys: string[] = [
-		    UI_CONSTANTS.URL_PARAMS.PAGE,
-		    UI_CONSTANTS.URL_PARAMS.PAGE_SIZE,
-		    UI_CONSTANTS.URL_PARAMS.SORT,
-		    UI_CONSTANTS.URL_PARAMS.ORDER,
-	    ];
-	    
-	    if (!excludedKeys.includes(key)) {
-		    newFilters[key] = value.split(',');
-	    }
+      const excludedKeys: string[] = [
+        UI_CONSTANTS.URL_PARAMS.PAGE,
+        UI_CONSTANTS.URL_PARAMS.PAGE_SIZE,
+        UI_CONSTANTS.URL_PARAMS.SORT,
+        UI_CONSTANTS.URL_PARAMS.ORDER,
+      ];
+
+      if (!excludedKeys.includes(key)) {
+        newFilters[key] = value.split(',');
+      }
     });
     setFilters(newFilters);
   }, [selectedEndpoint, location.search]);
@@ -505,10 +514,9 @@ export default function ItemCrud({
 
       const response = await apiClient.get(`${selectedEndpoint.url}/${itemId}`);
       const { data } = response.data;
-      
 
       // Set the modal state based on the operation type
-      setModalState({ type: operation, item: data as Item  });
+      setModalState({ type: operation, item: data as Item });
 
       // Additional state updates based on operation
       if (operation === 'edit') {
@@ -553,8 +561,60 @@ export default function ItemCrud({
           // Handle objects (convert to JSON string)
           formData.append(key, JSON.stringify(value));
         } else {
-          // For primitive values
-          formData.append(key, String(value));
+          // For date fields, handle timezone conversion
+          const field = selectedEndpoint.fields.find((f) => f.key === key);
+          if (
+            field &&
+            (field.type === 'date' || field.type === 'datetime') &&
+            value
+          ) {
+            const date = dayjs(value as string);
+            if (date.isValid()) {
+              console.log('=== Date Field Processing ===');
+              console.log('Field:', field.key);
+              console.log('Type:', field.type);
+              console.log('shouldConvertToLocalTime:', field.keepLocalTime);
+              console.log('Original value:', value);
+              console.log('Parsed date (UTC):', date.toString());
+              console.log('Parsed date ISO:', date.toISOString());
+              console.log('Parsed date local:', date.local().toString());
+
+              let finalDate;
+              if (field.keepLocalTime) {
+                // Convert UTC to local time
+                finalDate = date.local();
+                console.log('Converting UTC to local time');
+                console.log('Local time:', finalDate.toString());
+                console.log('Local time ISO:', finalDate.toISOString());
+              } else {
+                // Keep UTC time as-is
+                finalDate = date.utc();
+                console.log('Keeping UTC time');
+              }
+              console.log('Final date:', finalDate.toString());
+              console.log('Final date ISO:', finalDate.toISOString());
+
+              // Format the date without timezone information
+              let formattedDate;
+              if (field.type === 'date') {
+                // For date fields, use YYYY-MM-DD format
+                formattedDate = finalDate.format('YYYY-MM-DD');
+              } else {
+                // For datetime fields, use format without timezone
+                formattedDate = finalDate.format('YYYY-MM-DDTHH:mm:ss');
+              }
+              console.log('Formatted date (no timezone):', formattedDate);
+              console.log('=== End Date Processing ===');
+
+              formData.append(key, formattedDate);
+            } else {
+              console.log('Invalid date value:', value);
+              formData.append(key, String(value));
+            }
+          } else {
+            // For primitive values
+            formData.append(key, String(value));
+          }
         }
       }
 
@@ -654,6 +714,10 @@ export default function ItemCrud({
       if ('uid' in value) {
         return (value as { uid: string }).uid;
       }
+      // Handle Date objects
+      if (value instanceof Date) {
+        return value.toISOString();
+      }
       return String(value);
     }
 
@@ -683,7 +747,7 @@ export default function ItemCrud({
       return value; // Return the boolean value itself
     }
 
-    return String(value); // Fallback for other types (like Date, Symbol, etc.)
+    return String(value); // Fallback for other types (like Symbol, etc.)
   };
 
   const renderFormField = (field: FieldConfig) => {
@@ -804,6 +868,89 @@ export default function ItemCrud({
     }
 
     switch (field.type) {
+      case 'date':
+        return (
+          <Form.Item
+            name={field.key as NamePath}
+            label={field.label}
+            rules={[
+              ...rules,
+              {
+                validator: async (_, value) => {
+                  if (value && typeof value === 'string') {
+                    const date = dayjs(value);
+                    if (!date.isValid()) {
+                      throw new Error('Invalid date');
+                    }
+                  }
+                },
+              },
+            ]}
+            getValueProps={(value) => {
+              if (!value) return { value: null };
+              const date = dayjs(value);
+              return { value: date.isValid() ? date : null };
+            }}
+            normalize={(value) => {
+              if (!value) return null;
+              const date = dayjs(value);
+              if (!date.isValid()) return null;
+              // If shouldConvertToLocalTime is true, convert to UTC
+              // If false, keep the exact time from the API
+              return field.keepLocalTime
+                ? date.utc().toISOString()
+                : date.toISOString();
+            }}>
+            <DatePicker
+              style={{ width: '100%' }}
+              disabled={isDisabled}
+              placeholder={field.placeHolder || `Select ${field.label}`}
+              format={field.dateFormat || 'YYYY-MM-DD'}
+            />
+          </Form.Item>
+        );
+      case 'datetime':
+        return (
+          <Form.Item
+            name={field.key as NamePath}
+            label={field.label}
+            rules={[
+              ...rules,
+              {
+                validator: async (_, value) => {
+                  if (value && typeof value === 'string') {
+                    const date = dayjs(value);
+                    if (!date.isValid()) {
+                      throw new Error('Invalid date and time');
+                    }
+                  }
+                },
+              },
+            ]}
+            getValueProps={(value) => {
+              if (!value) return { value: null };
+              const date = dayjs(value);
+              return { value: date.isValid() ? date : null };
+            }}
+            normalize={(value) => {
+              if (!value) return null;
+              const date = dayjs(value);
+              if (!date.isValid()) return null;
+              // If shouldConvertToLocalTime is true, convert to UTC
+              // If false, keep the exact time from the API
+              return field.keepLocalTime
+                ? date.utc().toISOString()
+                : date.toISOString();
+            }}>
+            <DatePicker
+              showTime
+              style={{ width: '100%' }}
+              disabled={isDisabled}
+              placeholder={field.placeHolder || `Select ${field.label}`}
+              format={field.dateFormat || 'YYYY-MM-DD HH:mm:ss'}
+            />
+          </Form.Item>
+        );
       case 'boolean':
         return (
           <Form.Item
@@ -1026,14 +1173,17 @@ export default function ItemCrud({
                 }
 
                 if (field.type === 'relation' && field.relation && value) {
-	                const idValue =
-		                typeof value === 'object' && field.relation && field.relation.idField &&
-		                field.relation.idField in value
-			                ? (value as Record<string, unknown>)[field.relation.idField]
-			                : renderValue(value);
-	                
-	                
-	                return (
+                  const idValue =
+                    typeof value === 'object' &&
+                    field.relation &&
+                    field.relation.idField &&
+                    field.relation.idField in value
+                      ? (value as Record<string, unknown>)[
+                          field.relation.idField
+                        ]
+                      : renderValue(value);
+
+                  return (
                     <Button
                       type='link'
                       onClick={() => {
@@ -1041,7 +1191,12 @@ export default function ItemCrud({
                           field.relation!.entity
                         }/view/${idValue}`;
                       }}>
-                       {getRelationString(field.relation, value as Item) as ReactNode}
+                      {
+                        getRelationString(
+                          field.relation,
+                          value as Item
+                        ) as ReactNode
+                      }
                     </Button>
                   );
                 }
@@ -1078,11 +1233,21 @@ export default function ItemCrud({
                     />
                   );
                 }
+
                 if (field.type === 'url' && value) {
                   return (
                     <Image width={40} src={renderValue(value) as string} />
                   );
                 }
+
+                if (field.type === 'date') {
+                  return formatDate(value, field.keepLocalTime);
+                }
+
+                if (field.type === 'datetime') {
+                  return formatDateTime(value, field.keepLocalTime);
+                }
+
                 return renderValue(value) as React.ReactNode;
               },
             };
@@ -1162,7 +1327,7 @@ export default function ItemCrud({
             // Use window.location.href to navigate without triggering React Router effects
             window.location.href = `/${field.relation!.entity}/view/${idValue}`;
           }}>
-	        {getRelationString(field.relation, value as Item) as ReactNode}
+          {getRelationString(field.relation, value as Item) as ReactNode}
         </Button>
       );
     }
@@ -1187,6 +1352,14 @@ export default function ItemCrud({
 
     if (field.type === 'url' && value) {
       return <Image width={100} src={String(value)} />;
+    }
+
+    if (field.type === 'date') {
+      return formatDate(value, field.keepLocalTime);
+    }
+
+    if (field.type === 'datetime') {
+      return formatDateTime(value, field.keepLocalTime);
     }
 
     if (value !== null && value !== undefined) {

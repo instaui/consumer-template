@@ -1,9 +1,9 @@
 import { App as AntApp, ConfigProvider } from 'antd';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 
+import { EndpointConfig } from './components/types.ts';
 import ItemCrud from './components/ItemCrud';
 import axios from 'axios';
-import {EndpointConfig} from "./components/types.ts";
 
 // Helper functions for custom rendering
 const formatCurrency = (value: unknown): React.ReactNode => {
@@ -89,15 +89,27 @@ function App() {
           filterType: 'eq',
         },
         {
-          key: 'email',
-          label: 'Email',
-          type: 'email',
+          key: 'date',
+          label: 'Date',
+          type: 'datetime',
           required: true,
           showInList: true,
           patchable: true,
           postable: true,
           filterable: true,
           filterType: 'eq',
+        },
+        {
+          key: 'date2',
+          label: 'Date2',
+          type: 'datetime',
+          required: true,
+          showInList: true,
+          patchable: true,
+          postable: true,
+          filterable: true,
+          filterType: 'eq',
+          keepLocalTime: true,
         },
         {
           key: 'photo',
