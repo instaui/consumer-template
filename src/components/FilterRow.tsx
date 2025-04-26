@@ -1,6 +1,6 @@
 import {FieldConfig} from "./types.ts";
 import {type ReactNode, useEffect, useState} from "react";
-import {Button, DatePicker, Input, InputNumber, Row, Select, Space} from "antd";
+import {Button, DatePicker, Input, InputNumber, Row, Select, Space, TimePicker} from "antd";
 import {UI_CONSTANTS} from "../constants.ts";
 import dayjs from 'dayjs';
 
@@ -78,6 +78,37 @@ export const FilterRow: React.FC<{
 									showTime={field.type === 'datetime'}
 								/>
 							</Space>
+						) : field.filterType === 'range' && field.type === 'time' ? (
+							<Space>
+								<TimePicker
+									placeholder={UI_CONSTANTS.FILTER_PLACEHOLDERS.MIN}
+									style={{width: UI_CONSTANTS.LAYOUT.FILTER_INPUT_WIDTH}}
+									value={localFilters[field.key]?.[0] ? dayjs(localFilters[field.key][0]) : null}
+									onChange={(time) =>
+										handleFilterChange(
+											field.key,
+											time
+												? [time.format('HH:mm:ss'), localFilters[field.key]?.[1] || '']
+												: null
+										)
+									}
+									format="HH:mm:ss"
+								/>
+								<TimePicker
+									placeholder={UI_CONSTANTS.FILTER_PLACEHOLDERS.MAX}
+									style={{width: UI_CONSTANTS.LAYOUT.FILTER_INPUT_WIDTH}}
+									value={localFilters[field.key]?.[1] ? dayjs(localFilters[field.key][1]) : null}
+									onChange={(time) =>
+										handleFilterChange(
+											field.key,
+											time
+												? [localFilters[field.key]?.[0] || '', time.format('HH:mm:ss')]
+												: null
+										)
+									}
+									format="HH:mm:ss"
+								/>
+							</Space>
 						) : field.filterType === 'range' ? (
 							<Space>
 								<InputNumber
@@ -127,6 +158,32 @@ export const FilterRow: React.FC<{
 								value={localFilters[field.key]?.[0]}
 								onChange={(value) => handleFilterChange(field.key, value)}
 								options={field.options}
+							/>
+						) : field.type === 'date' || field.type === 'datetime' ? (
+							<DatePicker
+								placeholder={UI_CONSTANTS.FILTER_PLACEHOLDERS.SELECT}
+								style={{width: UI_CONSTANTS.LAYOUT.FILTER_TEXT_WIDTH}}
+								value={localFilters[field.key]?.[0] ? dayjs(localFilters[field.key][0]) : null}
+								onChange={(date) =>
+									handleFilterChange(
+										field.key,
+										date ? date.toISOString() : null
+									)
+								}
+								showTime={field.type === 'datetime'}
+							/>
+						) : field.type === 'time' ? (
+							<TimePicker
+								placeholder={UI_CONSTANTS.FILTER_PLACEHOLDERS.SELECT}
+								style={{width: UI_CONSTANTS.LAYOUT.FILTER_TEXT_WIDTH}}
+								value={localFilters[field.key]?.[0] ? dayjs(localFilters[field.key][0]) : null}
+								onChange={(time) =>
+									handleFilterChange(
+										field.key,
+										time ? time.format('HH:mm:ss') : null
+									)
+								}
+								format="HH:mm:ss"
 							/>
 						) : (
 							<Input

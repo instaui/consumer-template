@@ -14,6 +14,7 @@ import {
   Spin,
   Switch,
   Table,
+  TimePicker,
   Upload,
   message,
   notification,
@@ -1120,7 +1121,145 @@ export default function ItemCrud({
                       }
                     };
 
-                    if (field.filterType === 'range') {
+                    if (field.filterType === 'range' && (field.type === 'date' || field.type === 'datetime')) {
+                      return (
+                        <div style={{ padding: 8 }}>
+                          <DatePicker
+                            placeholder={UI_CONSTANTS.FILTER_PLACEHOLDERS.MIN}
+                            value={selectedKeys[0] ? dayjs(selectedKeys[0] as string) : null}
+                            onChange={(date) =>
+                              setSelectedKeys(
+                                date
+                                  ? [
+                                      date.toISOString(),
+                                      selectedKeys[
+                                        UI_CONSTANTS.DEFAULTS.FIRST_PAGE
+                                      ],
+                                    ]
+                                  : []
+                              )
+                            }
+                            showTime={field.type === 'datetime'}
+                            style={{
+                              width: UI_CONSTANTS.LAYOUT.FILTER_INPUT_WIDTH,
+                              marginRight: UI_CONSTANTS.STYLES.MARGIN.RIGHT,
+                              marginBottom: 8,
+                            }}
+                          />
+                          <DatePicker
+                            placeholder={UI_CONSTANTS.FILTER_PLACEHOLDERS.MAX}
+                            value={
+                              selectedKeys[
+                                UI_CONSTANTS.DEFAULTS.FIRST_PAGE
+                              ] ? dayjs(selectedKeys[
+                                UI_CONSTANTS.DEFAULTS.FIRST_PAGE
+                              ] as string) : null
+                            }
+                            onChange={(date) =>
+                              setSelectedKeys([selectedKeys[0], date ? date.toISOString() : ''])
+                            }
+                            showTime={field.type === 'datetime'}
+                            style={{
+                              width: UI_CONSTANTS.LAYOUT.FILTER_INPUT_WIDTH,
+                              marginBottom: 8,
+                            }}
+                          />
+                          <div>
+                            <Button
+                              type='primary'
+                              onClick={() => confirm()}
+                              size='small'
+                              style={{
+                                width: UI_CONSTANTS.LAYOUT.FILTER_BUTTON_WIDTH,
+                                marginRight: UI_CONSTANTS.STYLES.MARGIN.RIGHT,
+                              }}>
+                              Filter
+                            </Button>
+                            {clearFilters && (
+                              <Button
+                                onClick={() => {
+                                  if (clearFilters) {
+                                    clearFilters();
+                                    confirm();
+                                  }
+                                }}
+                                size='small'>
+                                Reset
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    } else if (field.filterType === 'range' && field.type === 'time') {
+                      return (
+                        <div style={{ padding: 8 }}>
+                          <TimePicker
+                            placeholder={UI_CONSTANTS.FILTER_PLACEHOLDERS.MIN}
+                            value={selectedKeys[0] ? dayjs(selectedKeys[0] as string) : null}
+                            onChange={(time) =>
+                              setSelectedKeys(
+                                time
+                                  ? [
+                                      time.format('HH:mm:ss'),
+                                      selectedKeys[
+                                        UI_CONSTANTS.DEFAULTS.FIRST_PAGE
+                                      ],
+                                    ]
+                                  : []
+                              )
+                            }
+                            format="HH:mm:ss"
+                            style={{
+                              width: UI_CONSTANTS.LAYOUT.FILTER_INPUT_WIDTH,
+                              marginRight: UI_CONSTANTS.STYLES.MARGIN.RIGHT,
+                              marginBottom: 8,
+                            }}
+                          />
+                          <TimePicker
+                            placeholder={UI_CONSTANTS.FILTER_PLACEHOLDERS.MAX}
+                            value={
+                              selectedKeys[
+                                UI_CONSTANTS.DEFAULTS.FIRST_PAGE
+                              ] ? dayjs(selectedKeys[
+                                UI_CONSTANTS.DEFAULTS.FIRST_PAGE
+                              ] as string) : null
+                            }
+                            onChange={(time) =>
+                              setSelectedKeys([selectedKeys[0], time ? time.format('HH:mm:ss') : ''])
+                            }
+                            format="HH:mm:ss"
+                            style={{
+                              width: UI_CONSTANTS.LAYOUT.FILTER_INPUT_WIDTH,
+                              marginBottom: 8,
+                            }}
+                          />
+                          <div>
+                            <Button
+                              type='primary'
+                              onClick={() => confirm()}
+                              size='small'
+                              style={{
+                                width: UI_CONSTANTS.LAYOUT.FILTER_BUTTON_WIDTH,
+                                marginRight: UI_CONSTANTS.STYLES.MARGIN.RIGHT,
+                              }}>
+                              Filter
+                            </Button>
+                            {clearFilters && (
+                              <Button
+                                onClick={() => {
+                                  if (clearFilters) {
+                                    clearFilters();
+                                    confirm();
+                                  }
+                                }}
+                                size='small'>
+                                Reset
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    } else if (field.filterType === 'range') {
                       return (
                         <div style={{ padding: 8 }}>
                           <Input

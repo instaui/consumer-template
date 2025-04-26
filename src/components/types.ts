@@ -25,6 +25,7 @@ export interface FieldConfig {
     | 'boolean'
     | 'date'
     | 'datetime'
+    | 'time'
     | 'textarea'
     | 'select'
     | 'relation'
