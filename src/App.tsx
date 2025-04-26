@@ -355,6 +355,12 @@ function App() {
             entity: 'users',
             idField: 'uid',
             keyColumns: ['fname', 'lname', 'email'],
+	          dropDownOptions:(a) => {
+		          return  {
+			          label: a.fname,
+			          value: a.uid
+		          }
+	          }
           },
         },
       ],

@@ -2,11 +2,6 @@ import type { FormInstance, Rule } from 'antd/es/form';
 
 import type { ReactNode } from 'react';
 
-interface ValidationResult {
-  status: boolean;
-  message?: string;
-}
-
 export interface Item {
   [key: string]: unknown;
 }
@@ -17,7 +12,7 @@ export interface RelationConfig {
   entity: string;
   idField: string;
   keyColumns?: string[];
-  dropDownOptions?: (value: unknown) => { label: string; value: string };
+  dropDownOptions?: (value: Record<string, unknown>) => { label: string; value: string };
 }
 
 export interface FieldConfig {
@@ -67,7 +62,7 @@ export interface EndpointConfig {
   validator: (values: Record<string, unknown>) => Record<string, string>;
   renderDetail?: (...args: unknown[]) => ReactNode;
   renderEdit?: (...args: unknown[]) => ReactNode;
-  customComponent?: React.ComponentType<any>;
+  customComponent?: React.ComponentType;
   header?: React.ReactNode;
   footer?: React.ReactNode;
 }

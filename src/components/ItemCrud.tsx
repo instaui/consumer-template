@@ -97,7 +97,7 @@ export default function ItemCrud({
 
   const [collapsed, setCollapsed] = useState(false);
 
-  const [sorting, setSorting] = useState<{
+  const [_, setSorting] = useState<{
     field: string | null;
     order: SortOrder;
   }>({
