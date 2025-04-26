@@ -1092,6 +1092,7 @@ export default function ItemCrud({
               title: field.label,
               dataIndex: field.key,
               key: field.key,
+              width: UI_CONSTANTS.LAYOUT.COLUMN_MIN_WIDTH,
               sorter: !!field.sortable,
               sortOrder: sortOrder,
               filtered: field.filterable ? !!filters[field.key] : undefined,
@@ -1593,6 +1594,7 @@ export default function ItemCrud({
         {
           title: UI_CONSTANTS.BUTTON_TEXTS.ACTIONS,
           key: 'actions',
+          width: UI_CONSTANTS.LAYOUT.COLUMN_MIN_WIDTH,
           render: (_: unknown, record: Item) => {
             const { idField } = selectedEndpoint;
             if (!idField) {

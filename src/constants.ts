@@ -116,6 +116,7 @@ export const UI_CONSTANTS = {
     HEADER_MARGIN: 16,
     HEADER_TITLE_MARGIN: 0,
     TABLE_MIN_HEIGHT: 0,
+    COLUMN_MIN_WIDTH: 150,
   },
 
   // Default values
