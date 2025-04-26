@@ -1132,7 +1132,7 @@ export default function ItemCrud({
                               setSelectedKeys(
                                 date
                                   ? [
-                                      date.toISOString(),
+                                      field.keepLocalTime ? date.format('YYYY-MM-DD HH:mm:ss') : date.toISOString(),
                                       selectedKeys[
                                         UI_CONSTANTS.DEFAULTS.FIRST_PAGE
                                       ],
@@ -1157,7 +1157,7 @@ export default function ItemCrud({
                               ] as string) : null
                             }
                             onChange={(date) =>
-                              setSelectedKeys([selectedKeys[0], date ? date.toISOString() : ''])
+                              setSelectedKeys([selectedKeys[0], date ? (field.keepLocalTime ? date.format('YYYY-MM-DD HH:mm:ss') : date.toISOString()) : ''])
                             }
                             showTime={field.type === 'datetime'}
                             style={{
@@ -1427,7 +1427,7 @@ export default function ItemCrud({
                             }}
                             value={selectedKeys[0] ? dayjs(selectedKeys[0] as string) : null}
                             onChange={(date) => {
-                              setSelectedKeys(date ? [date.toISOString()] : []);
+                              setSelectedKeys(date ? [(field.keepLocalTime ? date.format('YYYY-MM-DD HH:mm:ss') : date.toISOString())] : []);
                               confirm();
                             }}
                             showTime={field.type === 'datetime'}
@@ -1591,33 +1591,51 @@ export default function ItemCrud({
               },
             };
           }),
-        {
-          title: UI_CONSTANTS.BUTTON_TEXTS.ACTIONS,
-          key: 'actions',
-          width: UI_CONSTANTS.LAYOUT.COLUMN_MIN_WIDTH,
-          render: (_: unknown, record: Item) => {
-            const { idField } = selectedEndpoint;
-            if (!idField) {
-              return null;
-            }
-            return (
-              <Space>
-                <Button
-                  type='primary'
-                  icon={(<EditOutlined />) as ReactNode}
-                  onClick={() => handleEdit(record)}>
-                  {UI_CONSTANTS.BUTTON_TEXTS.EDIT}
-                </Button>
-                <Button
-                  danger
-                  icon={(<DeleteOutlined />) as ReactNode}
-                  onClick={() => handleDelete(record[idField] as string)}>
-                  {UI_CONSTANTS.BUTTON_TEXTS.DELETE}
-                </Button>
-              </Space>
-            );
-          },
-        },
+        // Only add the actions column if at least one action button is visible
+        ...(selectedEndpoint.actionButtons?.show === false ||
+            (selectedEndpoint.actionButtons?.edit?.show === false &&
+             selectedEndpoint.actionButtons?.delete?.show === false)
+          ? []
+          : [{
+              title: UI_CONSTANTS.BUTTON_TEXTS.ACTIONS,
+              key: 'actions',
+              width: UI_CONSTANTS.LAYOUT.COLUMN_MIN_WIDTH,
+              render: (_: unknown, record: Item) => {
+                const { idField, actionButtons } = selectedEndpoint;
+                if (!idField) {
+                  return null;
+                }
+
+                // If actionButtons.show is explicitly false, don't show any buttons
+                if (actionButtons?.show === false) {
+                  return null;
+                }
+
+                return (
+                  <Space>
+                    {/* Show edit button unless explicitly hidden */}
+                    {actionButtons?.edit?.show !== false && (
+                      <Button
+                        type='primary'
+                        icon={actionButtons?.edit?.icon || ((<EditOutlined />) as ReactNode)}
+                        onClick={() => handleEdit(record)}>
+                        {actionButtons?.edit?.text || UI_CONSTANTS.BUTTON_TEXTS.EDIT}
+                      </Button>
+                    )}
+
+                    {/* Show delete button unless explicitly hidden */}
+                    {actionButtons?.delete?.show !== false && (
+                      <Button
+                        danger
+                        icon={actionButtons?.delete?.icon || ((<DeleteOutlined />) as ReactNode)}
+                        onClick={() => handleDelete(record[idField] as string)}>
+                        {actionButtons?.delete?.text || UI_CONSTANTS.BUTTON_TEXTS.DELETE}
+                      </Button>
+                    )}
+                  </Space>
+                );
+              },
+            }]),
       ]
     : [];
 

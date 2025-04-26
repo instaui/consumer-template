@@ -169,6 +169,15 @@ function App() {
       footer: <div style={{ padding: '16px', background: '#e6f7ff', borderRadius: '4px', marginTop: '24px', textAlign: 'center' }}>
         <Typography.Text>Users data is managed according to our privacy policy.</Typography.Text>
       </div>,
+      // Customize action buttons
+      actionButtons: {
+        edit: {
+          text: 'Modify User',
+        },
+        delete: {
+          text: 'Remove User',
+        },
+      },
       fields: [
         {
           key: 'uid',
@@ -206,7 +215,7 @@ function App() {
         {
           key: 'date',
           label: 'Date',
-          type: 'datetime',
+          type: 'date',
           required: true,
           showInList: true,
           patchable: true,
@@ -261,6 +270,10 @@ function App() {
       label: 'Agents',
       url: '/agents',
       idField: 'uid',
+      // Hide all action buttons
+      actionButtons: {
+        show: false
+      },
       fields: [
         {
           key: 'uid',
@@ -383,6 +396,12 @@ function App() {
       header: <CustomHeader />,
       // Use the custom footer
       footer: <CustomFooter />,
+      // Hide only the delete button
+      actionButtons: {
+        delete: {
+          show: false
+        }
+      },
       fields: [
         {
           key: 'uid',

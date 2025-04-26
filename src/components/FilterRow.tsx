@@ -57,7 +57,7 @@ export const FilterRow: React.FC<{
 										handleFilterChange(
 											field.key,
 											date
-												? [date.toISOString(), localFilters[field.key]?.[1] || '']
+												? [field.keepLocalTime ? date.format('YYYY-MM-DD HH:mm:ss') : date.toISOString(), localFilters[field.key]?.[1] || '']
 												: null
 										)
 									}
@@ -71,7 +71,7 @@ export const FilterRow: React.FC<{
 										handleFilterChange(
 											field.key,
 											date
-												? [localFilters[field.key]?.[0] || '', date.toISOString()]
+												? [localFilters[field.key]?.[0] || '', field.keepLocalTime ? date.format('YYYY-MM-DD HH:mm:ss') : date.toISOString()]
 												: null
 										)
 									}
@@ -167,7 +167,7 @@ export const FilterRow: React.FC<{
 								onChange={(date) =>
 									handleFilterChange(
 										field.key,
-										date ? date.toISOString() : null
+										date ? (field.keepLocalTime ? date.format('YYYY-MM-DD HH:mm:ss') : date.toISOString()) : null
 									)
 								}
 								showTime={field.type === 'datetime'}

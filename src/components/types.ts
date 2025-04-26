@@ -54,6 +54,20 @@ export interface FieldConfig {
   keepLocalTime?: boolean;
 }
 
+export interface ActionButtonConfig {
+  show?: boolean;
+  edit?: {
+    show?: boolean;
+    text?: string;
+    icon?: ReactNode;
+  };
+  delete?: {
+    show?: boolean;
+    text?: string;
+    icon?: ReactNode;
+  };
+}
+
 export interface EndpointConfig {
   key: string;
   label: string;
@@ -66,6 +80,7 @@ export interface EndpointConfig {
   customComponent?: React.ComponentType;
   header?: React.ReactNode;
   footer?: React.ReactNode;
+  actionButtons?: ActionButtonConfig;
 }
 
 interface BaseResponse {
