@@ -494,6 +494,20 @@ function App() {
             keyColumns: ['fname', 'lname', 'email'],
           },
         },
+        {
+          key: 'agent',
+          label: 'Agent',
+          type: 'relation',
+          required: false,
+          showInList: true,
+          patchable: true,
+          postable: true,
+          relation: {
+            entity: 'agents',
+            idField: 'uid',
+            keyColumns: ['email', 'uid'],
+          },
+        },
       ],
       validator: (values) => {
         const errors: Record<string, string> = {};
