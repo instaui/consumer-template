@@ -22,7 +22,6 @@ export const RelationField: React.FC<RelationFieldProps> = ({
   const [options, setOptions] = useState<{ label: string; value: string }[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchValue, setSearchValue] = useState('');
-  const [open, setOpen] = useState(false);
 
   // Pagination state
   const [pagination, setPagination] = useState({
@@ -134,7 +133,6 @@ export const RelationField: React.FC<RelationFieldProps> = ({
 
   // Handle dropdown visibility change
   const handleDropdownVisibleChange = useCallback((visible: boolean) => {
-    setOpen(visible);
 
     // Load initial options when opening dropdown if no options exist
     if (visible && options.length === 0 && !loading) {

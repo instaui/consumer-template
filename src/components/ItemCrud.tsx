@@ -810,10 +810,130 @@ export default function ItemCrud({
           ]
         : [];
 
+      // Add file type validation rule if accept is provided
+      if (field.accept) {
+        rules.push({
+          validator: async (_, value) => {
+            if (!value) return Promise.resolve();
+
+            // Handle both single file and array of files
+            const files = Array.isArray(value) ? value : [value];
+            const acceptTypes = Array.isArray(field.accept)
+              ? field.accept
+              : field.accept.split(',').map(type => type.trim());
+						
+            // Check each file against the accepted types
+            for (const file of files) {
+              const uploadFile = file.file ?? file as UploadFile;
+              const fileType = uploadFile.type || '';
+              const fileName = uploadFile.name || '';
+              const fileExtension = fileName.includes('.')
+                ? `.${fileName.split('.').pop()?.toLowerCase()}`
+                : '';
+
+              const isValidType = acceptTypes.some(type => {
+                // Handle wildcards like image/*
+                if (type.endsWith('/*')) {
+                  const mainType = type.split('/')[0];
+                  return fileType.startsWith(`${mainType}/`);
+                }
+                // Handle specific extensions like .jpg
+                if (type.startsWith('.')) {
+                  return fileExtension === type.toLowerCase();
+                }
+                // Handle simple extensions like pdf or odf (without dot)
+                if (/^[a-zA-Z0-9]+$/.test(type)) {
+                  return fileExtension === `.${type.toLowerCase()}`;
+                }
+                // Handle specific mime types
+                return fileType === type;
+              });
+
+              if (!isValidType) {
+                return Promise.reject(
+                  new Error(`File type not allowed. Accepted types: ${Array.isArray(field.accept) ? field.accept.join(', ') : field.accept}`)
+                );
+              }
+            }
+
+            return Promise.resolve();
+          }
+        });
+      }
+
+      // Add file size validation rule if maxSize is provided
+      if (field.maxSize) {
+        rules.push({
+          validator: async (_, value) => {
+	          if (!value) return Promise.resolve();
+	          
+	          // Handle both single file and array of files
+	          const files = Array.isArray(value) ? value : [value];
+						
+            // Check each file against the maxSize constraint
+            for (const file of files) {
+	            const uploadFile = file.file ?? file as UploadFile;
+              if (uploadFile.size && uploadFile.size / 1024 / 1024 > field.maxSize ) {
+                return Promise.reject(
+                  new Error(`${UI_CONSTANTS.MODAL_MESSAGES.FILE_SIZE_ERROR} ${field.maxSize}MB!`)
+                );
+              }
+            }
+
+            return Promise.resolve();
+          }
+        });
+      }
+
       const uploadProps = {
         name: field.key,
         headers: {
           authorization: 'Bearer your-token',
+        },
+        beforeUpload: (file: UploadFile) => {
+          // Validate file type if accept is provided
+          if (field.accept) {
+            const acceptTypes = Array.isArray(field.accept)
+              ? field.accept
+              : field.accept.split(',').map(type => type.trim());
+
+            const fileType = file.type || '';
+            const fileName = file.name || '';
+            const fileExtension = fileName.includes('.')
+              ? `.${fileName.split('.').pop()?.toLowerCase()}`
+              : '';
+
+            const isValidType = acceptTypes.some(type => {
+              // Handle wildcards like image/*
+              if (type.endsWith('/*')) {
+                const mainType = type.split('/')[0];
+                return fileType.startsWith(`${mainType}/`);
+              }
+              // Handle specific extensions like .jpg
+              if (type.startsWith('.')) {
+                return fileExtension === type.toLowerCase();
+              }
+              // Handle simple extensions like pdf or odf (without dot)
+              if (/^[a-zA-Z0-9]+$/.test(type)) {
+                return fileExtension === `.${type.toLowerCase()}`;
+              }
+              // Handle specific mime types
+              return fileType === type;
+            });
+
+            if (!isValidType) {
+              message.error(`${file.name} is not a valid file type. Accepted types: ${Array.isArray(field.accept) ? field.accept.join(', ') : field.accept}`);
+              return false;
+            }
+          }
+
+          // Validate file size if maxSize is provided
+          if (field.maxSize && file.size && file.size / 1024 / 1024 > field.maxSize) {
+            message.error(`${UI_CONSTANTS.MODAL_MESSAGES.FILE_SIZE_ERROR} ${field.maxSize}MB!`);
+            return false;
+          }
+
+          return true;
         },
         onChange(info: UploadChangeParam) {
           if (info.file.status === 'uploading') {
@@ -830,20 +950,33 @@ export default function ItemCrud({
               `${info.file.name} ${UI_CONSTANTS.MODAL_MESSAGES.FILE_SELECT_FAILED}`
             );
           }
-          if (
-            info.file.size &&
-            info.file.size / 1024 / 1024 > (field.maxSize || 0)
-          ) {
-            message.error(
-              `${UI_CONSTANTS.MODAL_MESSAGES.FILE_SIZE_ERROR} ${field.maxSize}MB!`
-            );
-            return false;
-          }
         },
-        accept: field.accept || (field.isImage ? 'image/*' : undefined),
+        accept: (() => {
+          if (!field.accept) {
+            return field.isImage ? 'image/*' : undefined;
+          }
+
+          const formatAcceptType = (type: string) => {
+            // If it's already a valid format (starts with . or contains /), return as is
+            if (type.startsWith('.') || type.includes('/')) {
+              return type;
+            }
+            // If it's a simple extension, add a dot prefix
+            if (/^[a-zA-Z0-9]+$/.test(type)) {
+              return `.${type}`;
+            }
+            return type;
+          };
+
+          if (Array.isArray(field.accept)) {
+            return field.accept.map(formatAcceptType).join(',');
+          }
+
+          return field.accept.split(',').map(type => formatAcceptType(type.trim())).join(',');
+        })(),
         maxCount: UI_CONSTANTS.DEFAULTS.FIRST_PAGE,
         fileList: uploadFileList,
-        customRequest: (options: UploadRequestOption) => {
+        customRequest: (options: { onSuccess: (arg0: string) => void; }) => {
           // This prevents the default upload behavior
           setTimeout(() => {
             options.onSuccess?.('ok');

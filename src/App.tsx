@@ -151,7 +151,7 @@ function App() {
   });
 
   // You can toggle this to switch between Modal and Drawer
-  const useDrawer = true;
+  const useDrawer = false;
 
   const endpoints: EndpointConfig[] = [
     {
@@ -469,6 +469,7 @@ function App() {
           patchable: true,
           postable: true,
           isImage: true,
+	        maxSize: 0,
         },
         {
           key: 'file',
@@ -479,6 +480,9 @@ function App() {
           patchable: true,
           postable: true,
           isFile: true,
+          accept: 'pdf',
+	        maxSize:1,
+	        
         },
         {
           key: 'user',
@@ -528,65 +532,7 @@ function App() {
 		  header: <CustomHeader />,
 		  // Use the custom footer
 		  footer: <CustomFooter />,
-		  fields: [
-			  {
-				  key: 'uid',
-				  label: 'ID',
-				  type: 'text',
-				  required: true,
-				  readOnly: true,
-				  showInList: true,
-				  filterable: true,
-				  filterType: 'eq',
-			  },
-			  {
-				  key: 'name',
-				  label: 'Name',
-				  type: 'text',
-				  required: true,
-				  showInList: true,
-				  patchable: true,
-				  postable: true,
-				  filterable: true,
-				  filterType: 'eq',
-			  },
-			  {
-				  key: 'description',
-				  label: 'Description',
-				  type: 'textarea',
-				  required: true,
-				  showInList: true,
-				  patchable: true,
-				  postable: true,
-				  filterable: true,
-				  filterType: 'eq',
-			  },
-			  {
-				  key: 'price',
-				  label: 'Price',
-				  type: 'number',
-				  required: true,
-				  showInList: true,
-				  patchable: true,
-				  postable: true,
-				  renderInList: formatCurrency,
-				  renderInDetail: formatCurrency,
-				  filterable: true,
-				  filterType: 'range',
-			  },
-			  {
-				  key: 'status',
-				  label: 'Status',
-				  type: 'boolean',
-				  required: true,
-				  showInList: true,
-				  patchable: true,
-				  postable: true,
-				  filterable: true,
-				  sortable: true,
-				  filterType: 'boolean',
-			  },
-		  ],
+		  fields: [],
 		  validator: (values) => {
 			  const errors: Record<string, string> = {};
 			  if (!values.name) errors.name = 'Name is required';
@@ -610,7 +556,7 @@ function App() {
             style={{
               width: '100vw',
               height: '100vh',
-              overflow: 'hidden',
+              overflow: 'scroll',
               display: 'flex',
               flexDirection: 'column',
             }}>
@@ -618,13 +564,7 @@ function App() {
             <AppHeader />
 
             {/* Main Content */}
-            <div
-              style={{
-                flex: 1,
-                display: 'flex',
-                flexDirection: 'column',
-                overflow: 'auto',
-              }}>
+            <div>
               <Routes>
                 <Route path='/' element={<Navigate to='/users' replace />} />
                 <Route

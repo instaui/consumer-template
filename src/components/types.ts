@@ -45,7 +45,7 @@ export interface FieldConfig {
   validator?: (value: unknown) => { status: boolean; message?: string };
   isFile?: boolean;
   isImage?: boolean;
-  accept?: string;
+  accept?: string | string[];
   maxSize?: number;
   postable?: boolean;
   patchable?: boolean;
