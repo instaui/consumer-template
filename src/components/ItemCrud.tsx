@@ -98,7 +98,8 @@ export default function ItemCrud({
 
   const [collapsed, setCollapsed] = useState(false);
 
-  const [_, setSorting] = useState<{
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [_sorting, setSorting] = useState<{
     field: string | null;
     order: SortOrder;
   }>({
@@ -140,7 +141,12 @@ export default function ItemCrud({
         return;
       }
 
-      const { count, data } = response.data;
+			
+      const responseData = response;
+      // Check if the response data has a 'data' property that is an array (ListResponse)
+      const isListResponse = Array.isArray(responseData.data);
+      const data = isListResponse ? responseData.data as unknown as Item[] : [responseData.data as unknown as Item];
+      const count = 'count' in responseData ? responseData.count as number : undefined;
       const total = count ?? data.length ?? 0;
 
       setPagination({
@@ -520,10 +526,13 @@ export default function ItemCrud({
       }
 
       const response = await apiClient.get(`${selectedEndpoint.url}/${itemId}`);
-      const { data } = response.data;
+      const responseData = response;
+
+      // Ensure data is a single item
+      const data = 'data' in responseData ? responseData.data as unknown as Item : {} as Item;
 
       // Set the modal state based on the operation type
-      setModalState({ type: operation, item: data as Item });
+      setModalState({ type: operation, item: data });
 
       // Additional state updates based on operation
       if (operation === 'edit') {
@@ -577,29 +586,15 @@ export default function ItemCrud({
           ) {
             const date = dayjs(value as string);
             if (date.isValid()) {
-              console.log('=== Date Field Processing ===');
-              console.log('Field:', field.key);
-              console.log('Type:', field.type);
-              console.log('shouldConvertToLocalTime:', field.keepLocalTime);
-              console.log('Original value:', value);
-              console.log('Parsed date (UTC):', date.toString());
-              console.log('Parsed date ISO:', date.toISOString());
-              console.log('Parsed date local:', date.local().toString());
 
               let finalDate;
               if (field.keepLocalTime) {
                 // Convert UTC to local time
                 finalDate = date.local();
-                console.log('Converting UTC to local time');
-                console.log('Local time:', finalDate.toString());
-                console.log('Local time ISO:', finalDate.toISOString());
               } else {
                 // Keep UTC time as-is
                 finalDate = date.utc();
-                console.log('Keeping UTC time');
               }
-              console.log('Final date:', finalDate.toString());
-              console.log('Final date ISO:', finalDate.toISOString());
 
               // Format the date without timezone information
               let formattedDate;
@@ -610,12 +605,9 @@ export default function ItemCrud({
                 // For datetime fields, use format without timezone
                 formattedDate = finalDate.format('YYYY-MM-DDTHH:mm:ss');
               }
-              console.log('Formatted date (no timezone):', formattedDate);
-              console.log('=== End Date Processing ===');
 
               formData.append(key, formattedDate);
             } else {
-              console.log('Invalid date value:', value);
               formData.append(key, String(value));
             }
           } else {
@@ -820,8 +812,8 @@ export default function ItemCrud({
             const files = Array.isArray(value) ? value : [value];
             const acceptTypes = Array.isArray(field.accept)
               ? field.accept
-              : field.accept.split(',').map(type => type.trim());
-						
+              : field.accept?.split(',').map(type => type.trim()) || [];
+
             // Check each file against the accepted types
             for (const file of files) {
               const uploadFile = file.file ?? file as UploadFile;
@@ -866,14 +858,14 @@ export default function ItemCrud({
         rules.push({
           validator: async (_, value) => {
 	          if (!value) return Promise.resolve();
-	          
+
 	          // Handle both single file and array of files
 	          const files = Array.isArray(value) ? value : [value];
-						
+
             // Check each file against the maxSize constraint
             for (const file of files) {
 	            const uploadFile = file.file ?? file as UploadFile;
-              if (uploadFile.size && uploadFile.size / 1024 / 1024 > field.maxSize ) {
+              if (uploadFile.size && field.maxSize && uploadFile.size / 1024 / 1024 > field.maxSize) {
                 return Promise.reject(
                   new Error(`${UI_CONSTANTS.MODAL_MESSAGES.FILE_SIZE_ERROR} ${field.maxSize}MB!`)
                 );
@@ -895,7 +887,7 @@ export default function ItemCrud({
           if (field.accept) {
             const acceptTypes = Array.isArray(field.accept)
               ? field.accept
-              : field.accept.split(',').map(type => type.trim());
+              : field.accept?.split(',').map(type => type.trim()) || [];
 
             const fileType = file.type || '';
             const fileName = file.name || '';
@@ -976,10 +968,12 @@ export default function ItemCrud({
         })(),
         maxCount: UI_CONSTANTS.DEFAULTS.FIRST_PAGE,
         fileList: uploadFileList,
-        customRequest: (options: { onSuccess: (arg0: string) => void; }) => {
+        customRequest: (options: any) => {
           // This prevents the default upload behavior
           setTimeout(() => {
-            options.onSuccess?.('ok');
+            if (options.onSuccess) {
+              options.onSuccess('ok');
+            }
           }, 0);
         },
       };

@@ -1,5 +1,5 @@
 import { Item, RelationFieldProps } from "./types.ts";
-import React, { ReactNode, useCallback, useEffect, useState } from "react";
+import React, {  useCallback, useEffect, useState } from "react";
 import { Form, message, Select, Spin } from "antd";
 import { UI_CONSTANTS } from "../constants.ts";
 import type { NamePath } from "antd/es/form/interface";
@@ -17,7 +17,7 @@ export const RelationField: React.FC<RelationFieldProps> = ({
   rules,
   isDisabled,
   form,
-}): ReactNode => {
+}) => {
   // Core state for the component
   const [options, setOptions] = useState<{ label: string; value: string }[]>([]);
   const [loading, setLoading] = useState(false);
@@ -67,8 +67,8 @@ export const RelationField: React.FC<RelationFieldProps> = ({
 
       // Process response data
       const responseData = response.data;
-      const items = responseData.data as [] ?? [];
-      const total = responseData.count ?? items.length;
+      const items = Array.isArray(responseData.data) ? responseData.data : [];
+      const total = 'count' in responseData ? responseData.count : items.length;
 
       // Map items to options
       const newOptions = items.map((item: Item) => {
@@ -76,26 +76,33 @@ export const RelationField: React.FC<RelationFieldProps> = ({
           return field.relation.dropDownOptions(item);
         }
 
+        // Ensure field.relation is defined (it should be at this point)
+        if (!field.relation) {
+          return { label: '', value: '' };
+        }
+
         return {
           label: field.relation.keyColumns
             ?.map((col) => item[col])
             .filter(Boolean)
             .join(' - ')
-            .toString(),
-          value: item[field.relation.idField],
+            .toString() || '',
+          value: String(item[field.relation.idField] || ''),
         };
       });
 
       // Update options - replace on first page, append on subsequent pages
-      setOptions(prev =>
-        page === 1 ? newOptions : [...prev, ...newOptions]
-      );
+      setOptions(prev => {
+        // Ensure we're returning an array of objects with the correct type
+        const updatedOptions = page === 1 ? newOptions : [...prev, ...newOptions];
+        return updatedOptions as { label: string; value: string }[];
+      });
 
       // Update pagination
       setPagination(prev => ({
         ...prev,
         current: page,
-        total,
+        total: total || 0, // Ensure total is always a number
       }));
     } catch (error) {
       const { message: errMessage } = error as { message: string };
@@ -172,5 +179,5 @@ export const RelationField: React.FC<RelationFieldProps> = ({
         getPopupContainer={(triggerNode) => triggerNode.parentNode as HTMLElement}
       />
     </Form.Item>
-  ) as ReactNode;
+  );
 };

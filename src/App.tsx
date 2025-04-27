@@ -5,6 +5,7 @@ import { EndpointConfig } from './components/types.ts';
 import ItemCrud from './components/ItemCrud';
 import axios from 'axios';
 import React from 'react';
+import { createApiClient } from './utils/apiAdapter';
 
 // Helper functions for custom rendering
 const formatCurrency = (value: unknown): React.ReactNode => {
@@ -142,13 +143,15 @@ const AppFooter = () => {
 };
 
 function App() {
-  const apiClient = axios.create({
+  const axiosInstance = axios.create({
     baseURL: 'http://localhost:3000',
     headers: {
       Authorization: 'Bearer your-token',
       'Content-Type': 'application/json',
     },
   });
+
+  const apiClient = createApiClient(axiosInstance);
 
   // You can toggle this to switch between Modal and Drawer
   const useDrawer = false;
@@ -233,7 +236,7 @@ function App() {
           postable: true,
           filterable: true,
           filterType: 'range',
-          keepLocalTime: true,
+          keepLocalTime: false,
         },
         {
           key: 'photo',
@@ -370,8 +373,8 @@ function App() {
             keyColumns: ['fname', 'lname', 'email'],
 	          dropDownOptions:(a) => {
 		          return  {
-			          label: a.fname,
-			          value: a.uid
+			          label: String(a.fname || ''),
+			          value: String(a.uid || '')
 		          }
 	          }
           },
@@ -482,7 +485,7 @@ function App() {
           isFile: true,
           accept: 'pdf',
 	        maxSize:1,
-	        
+
         },
         {
           key: 'user',

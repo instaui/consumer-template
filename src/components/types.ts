@@ -19,14 +19,13 @@ export interface FieldConfig {
   key: string;
   label: string;
   type:
-		| 'text'
-		| 'textarea'
+    | 'text'
+    | 'textarea'
     | 'number'
     | 'boolean'
     | 'date'
     | 'datetime'
     | 'time'
-    | 'textarea'
     | 'select'
     | 'relation'
     | 'url'
@@ -97,23 +96,23 @@ interface ItemResponse {
   data: Item;
 }
 
-interface APIResponse extends BaseResponse {
+export interface APIResponse extends BaseResponse {
   data: ListResponse | ItemResponse;
 }
 
-interface ApiClient {
-  get: (url: string, ...args: unknown[]) => Promise<APIResponse>;
+export interface ApiClient {
+  get: (url: string, config?: any) => Promise<APIResponse>;
   post: (
     url: string,
     data?: unknown,
-    ...args: unknown[]
+    config?: any
   ) => Promise<APIResponse>;
   patch: (
     url: string,
     data?: unknown,
-    ...args: unknown[]
+    config?: any
   ) => Promise<APIResponse>;
-  delete: (url: string, ...args: unknown[]) => Promise<APIResponse>;
+  delete: (url: string, config?: any) => Promise<APIResponse>;
 }
 
 export interface ItemCrudProps {
