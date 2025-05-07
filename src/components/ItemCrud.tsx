@@ -141,7 +141,7 @@ export default function ItemCrud({
         return;
       }
 
-			
+
       const responseData = response;
       // Check if the response data has a 'data' property that is an array (ListResponse)
       const isListResponse = Array.isArray(responseData.data);
@@ -1029,11 +1029,11 @@ export default function ItemCrud({
               if (!value) return null;
               const date = dayjs(value);
               if (!date.isValid()) return null;
-              // If shouldConvertToLocalTime is true, convert to UTC
-              // If false, keep the exact time from the API
+              // If keepLocalTime is true, keep the local time
+              // If false, convert to UTC
               return field.keepLocalTime
-                ? date.utc().toISOString()
-                : date.toISOString();
+                ? date.toISOString()
+                : date.utc().toISOString();
             }}>
             <DatePicker
               style={{ width: '100%' }}
@@ -1070,11 +1070,11 @@ export default function ItemCrud({
               if (!value) return null;
               const date = dayjs(value);
               if (!date.isValid()) return null;
-              // If shouldConvertToLocalTime is true, convert to UTC
-              // If false, keep the exact time from the API
+              // If keepLocalTime is true, keep the local time
+              // If false, convert to UTC
               return field.keepLocalTime
-                ? date.utc().toISOString()
-                : date.toISOString();
+                ? date.toISOString()
+                : date.utc().toISOString();
             }}>
             <DatePicker
               showTime
@@ -1259,7 +1259,7 @@ export default function ItemCrud({
                               setSelectedKeys(
                                 date
                                   ? [
-                                      field.keepLocalTime ? date.format('YYYY-MM-DD HH:mm:ss') : date.toISOString(),
+                                      field.keepLocalTime ? date.toISOString() : date.utc().toISOString(),
                                       selectedKeys[
                                         UI_CONSTANTS.DEFAULTS.FIRST_PAGE
                                       ],
@@ -1284,7 +1284,7 @@ export default function ItemCrud({
                               ] as string) : null
                             }
                             onChange={(date) =>
-                              setSelectedKeys([selectedKeys[0], date ? (field.keepLocalTime ? date.format('YYYY-MM-DD HH:mm:ss') : date.toISOString()) : ''])
+                              setSelectedKeys([selectedKeys[0], date ? (field.keepLocalTime ? date.toISOString() : date.utc().toISOString()) : ''])
                             }
                             showTime={field.type === 'datetime'}
                             style={{
@@ -1554,7 +1554,7 @@ export default function ItemCrud({
                             }}
                             value={selectedKeys[0] ? dayjs(selectedKeys[0] as string) : null}
                             onChange={(date) => {
-                              setSelectedKeys(date ? [(field.keepLocalTime ? date.format('YYYY-MM-DD HH:mm:ss') : date.toISOString())] : []);
+                              setSelectedKeys(date ? [(field.keepLocalTime ? date.toISOString() : date.utc().toISOString())] : []);
                               confirm();
                             }}
                             showTime={field.type === 'datetime'}
